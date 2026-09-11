@@ -32,10 +32,10 @@ func main() {
 		commands.RunRestore(args, projectRoot)
 	case "analyze":
 		commands.RunAnalyze(args, projectRoot)
-	case "update-meta":
-		commands.RunUpdateMeta(args, projectRoot)
 	case "generate":
 		commands.RunGenerate(args, projectRoot)
+	case "update-meta":
+		commands.RunUpdateMeta(args, projectRoot)
 	case "update":
 		commands.RunUpdate(args, projectRoot)
 	case "help", "--help", "-h":
@@ -57,9 +57,9 @@ Polecenia:
   verify      Weryfikuje strukture pliku ODS
   backup      Tworzy backup ODS z weryfikacja
   restore     Przywraca ODS z wybranego backupu
-  analyze     Wyswietla podsumowanie kolekcji
+  analyze     Generuje raport analizy (JSON + Markdown)
+  generate    Generuje nowy ODS z gamemastera
   update-meta Aktualizuje meta rankingi z PvPoke
-  generate    Generuje JSON snapshot i raport Markdown
   update      Regeneruje arkusze pochodne ODS
   help        Wyswietla te pomoc
 
