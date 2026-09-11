@@ -31,11 +31,11 @@ func RunGenerate(args []string, projectRoot string) {
 	}
 	gmMap := BuildGamemasterMap(gmData)
 
-	// Prepare species entries
-	entries := prepareEntries(gmData, gmMap)
-
 	// Prepare move lookup maps
-	fastMap, chargedMap := buildMoveMaps(gmData)
+	fastMap, chargedMap, moveLookup := buildMoveMaps(gmData)
+
+	// Prepare species entries
+	entries := prepareEntries(gmData, gmMap, moveLookup)
 
 	// Build sheets
 	kolekcjaCols := buildKolekcjaColumns()
@@ -54,7 +54,7 @@ func RunGenerate(args []string, projectRoot string) {
 		Name:         "Kolekcja",
 		Columns:      kolekcjaCols,
 		Header:       kolekcjaHeader(),
-		Rows:         buildKolekcjaRows(len(entries), len(atakiSheet.Rows)),
+		Rows:         buildKolekcjaRows(len(entries), len(atakiSheet.Rows), nil),
 		Validations:  kolekcjaValidations,
 	}
 
@@ -118,7 +118,7 @@ type speciesEntry struct {
 	IsShadow   bool
 }
 
-func prepareEntries(gm *GamemasterData, gmMap map[string]*model.GamemasterPokemon) []speciesEntry {
+func prepareEntries(gm *GamemasterData, gmMap map[string]*model.GamemasterPokemon, moveLookup map[string]string) []speciesEntry {
 	forceReleased := map[string]bool{
 		"ditto": true, "spewpa": true, "arrokuda": true, "cramorant": true,
 	}
@@ -215,29 +215,29 @@ func capitalize(s string) string {
 // Move lookup (populated at init)
 var moveLookup map[string]string
 
-func buildMoveMaps(gm *GamemasterData) (fastMap map[string][]string, chargedMap map[string][]string) {
-	moveLookup = make(map[string]string)
+func buildMoveMaps(gm *GamemasterData) (fastMap map[string][]string, chargedMap map[string][]string, lookup map[string]string) {
+	lookup = make(map[string]string)
 	fastMap = make(map[string][]string)
 	chargedMap = make(map[string][]string)
 
 	for _, m := range gm.Moves {
-		moveLookup[m.MoveID] = m.Name
+		lookup[m.MoveID] = m.Name
 	}
 
 	for _, p := range gm.Pokemon {
 		for _, id := range p.FastMoves {
-			if name, ok := moveLookup[id]; ok {
+			if name, ok := lookup[id]; ok {
 				fastMap[p.SpeciesID] = append(fastMap[p.SpeciesID], name)
 			}
 		}
 		for _, id := range p.ChargedMoves {
-			if name, ok := moveLookup[id]; ok {
+			if name, ok := lookup[id]; ok {
 				chargedMap[p.SpeciesID] = append(chargedMap[p.SpeciesID], name)
 			}
 		}
 	}
 
-	return fastMap, chargedMap
+	return fastMap, chargedMap, lookup
 }
 
 // --- Kolekcja Sheet ---
@@ -285,60 +285,136 @@ func kolekcjaHeader() []string {
 	}
 }
 
-func buildKolekcjaRows(nSpecies, nMoves int) [][]ods.Cell {
+func buildKolekcjaRows(nSpecies, nMoves int, userData [][]ods.Cell) [][]ods.Cell {
 	var rows [][]ods.Cell
 	lastRow := 1001 // 1000 data rows (rows 2-1001)
 
 	for r := 2; r <= lastRow; r++ {
+		rowIdx := r - 2 // 0-based index into userData
 		row := make([]ods.Cell, 27)
-		// A: UID (empty)
-		row[0] = ods.Cell{Type: "empty"}
+
+		hasData := userData != nil && rowIdx < len(userData)
+		var userRow []ods.Cell
+		if hasData {
+			userRow = userData[rowIdx]
+		}
+
+		// A: UID
+		if hasData && len(userRow) > 0 {
+			row[0] = userRow[0]
+		} else {
+			row[0] = ods.Cell{Type: "empty"}
+		}
 		// B: Gatunek (with validation)
-		row[1] = ods.Cell{Type: "empty", Validation: "valGat"}
-		// C: Wlasna nazwa (empty)
-		row[2] = ods.Cell{Type: "empty"}
+		if hasData && len(userRow) > 1 {
+			row[1] = userRow[1]
+		} else {
+			row[1] = ods.Cell{Type: "empty"}
+		}
+		row[1].Validation = "valGat"
+		// C: Wlasna nazwa
+		if hasData && len(userRow) > 2 {
+			row[2] = userRow[2]
+		} else {
+			row[2] = ods.Cell{Type: "empty"}
+		}
 		// D: Typ 1 (formula)
 		dFormula := fmt.Sprintf(`IF([.B%d]="";"";VLOOKUP([.B%d];$'Pokemon'.$B$2:$D$%d;2;0))`, r, r, nSpecies+1)
 		row[3] = ods.Cell{Type: "formula", Formula: dFormula, Style: "ce_ro"}
 		// E: Typ 2 (formula)
 		eFormula := fmt.Sprintf(`IF([.B%d]="";"";VLOOKUP([.B%d];$'Pokemon'.$B$2:$D$%d;3;0))`, r, r, nSpecies+1)
 		row[4] = ods.Cell{Type: "formula", Formula: eFormula, Style: "ce_ro"}
-		// F: CP (empty)
-		row[5] = ods.Cell{Type: "empty"}
-		// G-I: IV (empty)
-		row[6] = ods.Cell{Type: "empty"}
-		row[7] = ods.Cell{Type: "empty"}
-		row[8] = ods.Cell{Type: "empty"}
+		// F: CP
+		if hasData && len(userRow) > 5 {
+			row[5] = userRow[5]
+		} else {
+			row[5] = ods.Cell{Type: "empty"}
+		}
+		// G-I: IV
+		for i := 6; i <= 8; i++ {
+			if hasData && len(userRow) > i {
+				row[i] = userRow[i]
+			} else {
+				row[i] = ods.Cell{Type: "empty"}
+			}
+		}
 		// J: IV % (formula)
 		jFormula := fmt.Sprintf(`IF(COUNT([.G%d]:[.I%d])=3;([.G%d]+[.H%d]+[.I%d])/45*100;"")`, r, r, r, r, r)
 		row[9] = ods.Cell{Type: "formula", Formula: jFormula, Style: "ce_iv"}
-		// K: Fast Attack (with dynamic validation)
-		kVal := fmt.Sprintf("valF%d", r)
-		row[10] = ods.Cell{Type: "empty", Validation: kVal}
-		// L: Charged 1 (with dynamic validation)
-		lVal := fmt.Sprintf("valC1%d", r)
-		row[11] = ods.Cell{Type: "empty", Validation: lVal}
-		// M: Charged 2 (with dynamic validation)
-		mVal := fmt.Sprintf("valC2%d", r)
-		row[12] = ods.Cell{Type: "empty", Validation: mVal}
-		// N-S: Tick columns (with valX)
-		for i := 13; i <= 18; i++ {
-			row[i] = ods.Cell{Type: "empty", Style: "ce_center", Validation: "valX"}
+		// K: Fast Attack
+		if hasData && len(userRow) > 10 {
+			row[10] = userRow[10]
+		} else {
+			row[10] = ods.Cell{Type: "empty"}
 		}
-		// T: Inne cechy (empty)
-		row[19] = ods.Cell{Type: "empty"}
-		// U: Data (with date validation)
-		row[20] = ods.Cell{Type: "empty", Style: "ce_date", Validation: "valData"}
-		// V: Przeznaczenie (with validation)
-		row[21] = ods.Cell{Type: "empty", Validation: "valPrze"}
-		// W: Priorytet (with validation)
-		row[22] = ods.Cell{Type: "empty", Validation: "valPrio"}
-		// X: Decyzja (with validation)
-		row[23] = ods.Cell{Type: "empty", Validation: "valDec"}
-		// Y-AA: Freeform (empty)
-		row[24] = ods.Cell{Type: "empty"}
-		row[25] = ods.Cell{Type: "empty"}
-		row[26] = ods.Cell{Type: "empty"}
+		row[10].Validation = fmt.Sprintf("valF%d", r)
+		// L: Charged 1
+		if hasData && len(userRow) > 11 {
+			row[11] = userRow[11]
+		} else {
+			row[11] = ods.Cell{Type: "empty"}
+		}
+		row[11].Validation = fmt.Sprintf("valC1%d", r)
+		// M: Charged 2
+		if hasData && len(userRow) > 12 {
+			row[12] = userRow[12]
+		} else {
+			row[12] = ods.Cell{Type: "empty"}
+		}
+		row[12].Validation = fmt.Sprintf("valC2%d", r)
+		// N-S: Tick columns
+		for i := 13; i <= 18; i++ {
+			if hasData && len(userRow) > i {
+				row[i] = userRow[i]
+			} else {
+				row[i] = ods.Cell{Type: "empty"}
+			}
+			row[i].Style = "ce_center"
+			row[i].Validation = "valX"
+		}
+		// T: Inne cechy
+		if hasData && len(userRow) > 19 {
+			row[19] = userRow[19]
+		} else {
+			row[19] = ods.Cell{Type: "empty"}
+		}
+		// U: Data
+		if hasData && len(userRow) > 20 {
+			row[20] = userRow[20]
+		} else {
+			row[20] = ods.Cell{Type: "empty"}
+		}
+		row[20].Style = "ce_date"
+		row[20].Validation = "valData"
+		// V: Przeznaczenie
+		if hasData && len(userRow) > 21 {
+			row[21] = userRow[21]
+		} else {
+			row[21] = ods.Cell{Type: "empty"}
+		}
+		row[21].Validation = "valPrze"
+		// W: Priorytet
+		if hasData && len(userRow) > 22 {
+			row[22] = userRow[22]
+		} else {
+			row[22] = ods.Cell{Type: "empty"}
+		}
+		row[22].Validation = "valPrio"
+		// X: Decyzja
+		if hasData && len(userRow) > 23 {
+			row[23] = userRow[23]
+		} else {
+			row[23] = ods.Cell{Type: "empty"}
+		}
+		row[23].Validation = "valDec"
+		// Y-AA: Freeform
+		for i := 24; i <= 26; i++ {
+			if hasData && len(userRow) > i {
+				row[i] = userRow[i]
+			} else {
+				row[i] = ods.Cell{Type: "empty"}
+			}
+		}
 
 		rows = append(rows, row)
 	}

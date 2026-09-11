@@ -79,12 +79,8 @@ func RunUpdate(args []string, projectRoot string) {
 		kontoName = "unknown"
 	}
 
-	// 5. Generate new ODS (reuse RunGenerate logic)
+	// 5. Generate new ODS with collection data
 	fmt.Println("3/4 Generuje nowy ODS...")
-	generateODS(projectRoot, kontoName)
-
-	// 6. Inject collection data into new ODS
-	fmt.Println("4/4 Wgrywam dane Kolekcji...")
 	newPath := filepath.Join(projectRoot, fmt.Sprintf("Pokemon-GO-%s.ods", kontoName))
 	if err := injectCollection(newPath, collectionRows); err != nil {
 		fmt.Fprintf(os.Stderr, "FAIL: Inject collection: %v\n", err)
@@ -117,78 +113,6 @@ func extractCollectionRows(sheet *ods.Sheet) [][]string {
 	return rows
 }
 
-// generateODS creates a fresh ODS with all 7 sheets from gamemaster.
-func generateODS(projectRoot, konto string) {
-	gmPath := filepath.Join(projectRoot, "data", "gamemaster.json")
-
-	gmData, err := LoadGamemaster(gmPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "FAIL: Gamemaster: %v\n", err)
-		os.Exit(1)
-	}
-	gmMap := BuildGamemasterMap(gmData)
-
-	entries := prepareEntries(gmData, gmMap)
-	fastMap, chargedMap := buildMoveMaps(gmData)
-
-	kolekcjaCols := buildKolekcjaColumns()
-	pokemonSheet := buildPokemonSheet(entries)
-	ruchySheet := buildRuchySheet(gmData)
-	atakiSheet := buildAtakiSheet(fastMap, chargedMap, entries)
-	howtoSheet := buildHowtoSheet()
-	listySheet := buildListySheet()
-	pokedexSheet := buildPokedexSheet(entries)
-
-	kolekcjaValidations := buildKolekcjaValidations(len(entries), len(atakiSheet.Rows))
-
-	kolekcjaSheet := ods.SheetDef{
-		Name:         "Kolekcja",
-		Columns:      kolekcjaCols,
-		Header:       kolekcjaHeader(),
-		Rows:         buildKolekcjaRows(len(entries), len(atakiSheet.Rows)),
-		Validations:  kolekcjaValidations,
-	}
-
-	pokedexValidations := []ods.Validation{
-		{
-			Name:        "valPokedexTick",
-			Condition:   `of:cell-content-is-in-list($'Listy'.$A$2:$A$2)`,
-			BaseCell:    "Pokedex.F2",
-			DisplayList: "unsorted",
-			AllowEmpty:  true,
-			HelpMsg:     "Odhacz X jesli Reczyt juz zlapany.",
-		},
-	}
-	pokedexSheet.Validations = pokedexValidations
-
-	freezeConfig := map[string]ods.FreezePane{
-		"Kolekcja": {Rows: 1, Columns: 2},
-		"Pokemon":  {Rows: 1, Columns: 0},
-		"Ruchy":    {Rows: 1, Columns: 0},
-		"Ataki":    {Rows: 1, Columns: 0},
-		"Pokedex":  {Rows: 1, Columns: 2},
-	}
-
-	writer := &ods.ODSWriter{
-		Sheets: []ods.SheetDef{
-			kolekcjaSheet,
-			pokemonSheet,
-			ruchySheet,
-			atakiSheet,
-			howtoSheet,
-			listySheet,
-			pokedexSheet,
-		},
-		FreezeConfig: freezeConfig,
-	}
-
-	outPath := filepath.Join(projectRoot, fmt.Sprintf("Pokemon-GO-%s.ods", konto))
-	if err := ods.WriteODS(outPath, writer); err != nil {
-		fmt.Fprintf(os.Stderr, "FAIL: Write ODS: %v\n", err)
-		os.Exit(1)
-	}
-}
-
 func injectCollection(path string, collectionRows [][]string) error {
 	// We need to re-generate the ODS with the user's collection data
 	// by replacing the empty Kolekcja rows with the user's data
@@ -203,8 +127,8 @@ func injectCollection(path string, collectionRows [][]string) error {
 	}
 	gmMap := BuildGamemasterMap(gmData)
 
-	entries := prepareEntries(gmData, gmMap)
-	fastMap, chargedMap := buildMoveMaps(gmData)
+	fastMap, chargedMap, moveLookup := buildMoveMaps(gmData)
+	entries := prepareEntries(gmData, gmMap, moveLookup)
 
 	pokemonSheet := buildPokemonSheet(entries)
 	ruchySheet := buildRuchySheet(gmData)
@@ -230,7 +154,7 @@ func injectCollection(path string, collectionRows [][]string) error {
 	}
 
 	// Build Kolekcja sheet with user data + formulas
-	kolekcjaCellRows := buildKolekcjaRowsWithData(cellRows, len(entries), len(atakiSheet.Rows))
+	kolekcjaCellRows := buildKolekcjaRows(len(entries), len(atakiSheet.Rows), cellRows)
 
 	freezeConfig := map[string]ods.FreezePane{
 		"Kolekcja": {Rows: 1, Columns: 2},
