@@ -42,6 +42,7 @@ type Pokemon struct {
 	FamilyID     string    // Familie ID z gamemaster
 	Tags         []string  // Dodatkowe tagi (z kol T)
 	DevScore     float64   // Score rozwoju 0-100
+	MaxCP        int       // Max CP na lvl 50 (15/15/15)
 }
 
 // BaseStats represents Pokemon base statistics.

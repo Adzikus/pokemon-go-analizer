@@ -207,7 +207,10 @@ func ParseCollection(sheet *ods.Sheet, gmMap map[string]*model.GamemasterPokemon
 		ivAtk := ParseInt(row[6])
 		ivDef := ParseInt(row[7])
 		ivHP := ParseInt(row[8])
-		ivPct := ParsePercent(row[9])
+		ivPct := 0.0
+		if ivAtk+ivDef+ivHP > 0 {
+			ivPct = float64(ivAtk+ivDef+ivHP) / 45.0 * 100.0
+		}
 
 		fast := strings.TrimSpace(row[10])
 		ch1 := ""

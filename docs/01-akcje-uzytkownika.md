@@ -33,8 +33,8 @@ package "System Boundary" {
         [Gamemaster JSON\nBase stats, moves, CPM] as GamemasterJSON
         [Meta Rankings JSON\nPvPoke tiers S/A/B/C] as MetaRankingsJSON
         [Backups\nTimestamped copies] as BackupsDir
-        [Reports\nAnaliza-{date}-{model}-{account}.md] as ReportsDir
-        [Collection JSON\nSnapshot dla debugu] as CollectionJSON
+        [Analizy\nanalizy/Analiza-{date}-{model}-{account}.md] as ReportsDir
+        [Collection JSON\nanalizy/collection-{account}-{date}.json] as CollectionJSON
     }
 }
 
@@ -256,8 +256,8 @@ start
 :Pipeline Sekcja 7:\nFiltry => Scoring => League Cap => Sort => Output;
 
 :Renderuj Markdown Report;
-:Zapisz Analiza-{date}-opencode-{X}.md;
-:Zapisz collection-{X}-{date}.json;
+:Zapisz analizy/Analiza-{date}-opencode-{X}.md;
+:Zapisz analizy/collection-{X}-{date}.json;
 
 |Actor|
 :Raport gotowy;

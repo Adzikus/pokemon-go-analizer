@@ -79,12 +79,19 @@ func RunAnalyze(args []string, projectRoot string) {
 		kontoName = "unknown"
 	}
 
+	// Ensure analizy directory exists
+	analizyDir := filepath.Join(projectRoot, "analizy")
+	if err := os.MkdirAll(analizyDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "FAIL: Cannot create analizy dir: %v\n", err)
+		os.Exit(1)
+	}
+
 	// JSON snapshot
-	jsonPath := filepath.Join(projectRoot, fmt.Sprintf("collection-%s-%s.json", kontoName, dateStr))
+	jsonPath := filepath.Join(analizyDir, fmt.Sprintf("collection-%s-%s.json", kontoName, dateStr))
 	writeJSONSnapshot(jsonPath, collection, kontoName)
 
 	// Markdown report
-	mdPath := filepath.Join(projectRoot, fmt.Sprintf("Analiza-%s-opencode-%s.md", dateStr, kontoName))
+	mdPath := filepath.Join(analizyDir, fmt.Sprintf("Analiza-%s-opencode-%s.md", dateStr, kontoName))
 	writeMarkdownReport(mdPath, collection, kontoName, gmData, gmMap, metaData, metaTiers)
 
 	fmt.Printf("SUCCESS: Wygenerowano dla %s (%d Pokemon)\n", kontoName, len(collection))
@@ -209,10 +216,21 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 	}
 	sb.WriteString("\n")
 
-	// TOP 10 Power-Up (IV>=90%, CP<2500, tier S/A)
+	// TOP 10 Power-Up (IV>=90%, CP<2500, nie na max CP)
+	// Wykluczamy: PvP na GL cap, Pokemon na max CP (nie ma sensu podciągać)
 	sb.WriteString("### TOP 10 Power-Up\n\n")
 	powerUp := filterBool(c, func(p model.Pokemon) bool {
-		return p.IVPct >= 90 && p.CP < 2500 && (p.MetaTier == "S" || p.MetaTier == "A")
+		if p.IVPct < 90 || p.CP >= 2500 {
+			return false
+		}
+		if p.MaxCP > 0 && p.CP >= p.MaxCP {
+			return false
+		}
+		purpose := strings.ToUpper(p.Purpose)
+		if purpose == "PVP" && p.CP >= 1450 {
+			return false
+		}
+		return true
 	})
 	sortedPowerUp := SortByScore(powerUp)
 	for i, p := range TopN(sortedPowerUp, 10) {
@@ -220,6 +238,7 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 			i+1, p.Species, p.CP, p.IVPct, tierOrDash(p)))
 	}
 	sb.WriteString("\n")
+	sb.WriteString("_Wykluczone: Pokemon z Purpose=PvP na GL cap (CP≥1450) oraz Pokemon na max CP. Sortowanie wg DevScore._\n\n")
 
 	// TOP 10 Dev Score
 	sb.WriteString("### TOP 10 Dev Score\n\n")

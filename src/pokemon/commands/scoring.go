@@ -233,6 +233,10 @@ func EnrichWithScores(collection []model.Pokemon, gmMap map[string]*model.Gamema
 	for i := range collection {
 		result := CalculateDevScore(collection[i], gmMap, metaTiers)
 		collection[i].DevScore = result.Score
+		collection[i].MaxCP = CalculateMaxCP(
+			collection[i].BaseStats.Atk, collection[i].BaseStats.Def, collection[i].BaseStats.HP,
+			collection[i].IVAtk, collection[i].IVDef, collection[i].IVHP,
+		)
 	}
 	return collection
 }

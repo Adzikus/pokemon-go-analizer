@@ -2,4 +2,5 @@ analizy/**
 backups/**
 bin/**
 
+data/*.json*
 **/*.ods

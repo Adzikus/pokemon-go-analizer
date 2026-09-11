@@ -50,8 +50,8 @@ Pipeline jest wielokontowy — każdy gracz ma swój plik ODS (np. `Pokemon-GO-{
    └── Sekcja 7: Ranking Rozwoju (scoring 0-100)
 
 4. PREZENTACJA WYNIKÓW
-   ├── Zapisz raport → Analiza-{date}-{account}.md
-   └── Zapisz snapshot → collection-{account}-{date}.json
+   ├── Zapisz raport → analizy/Analiza-{date}-{account}.md
+   └── Zapisz snapshot → analizy/collection-{account}-{date}.json
 ```
 
 ---
@@ -84,8 +84,8 @@ package "Pipeline analizy" {
 }
 
 package "Wyjscie" {
-    [Analiza-{date}-{account}.md] as ReportMD
-    [collection-{account}-{date}.json] as CollectionJSON
+    [analizy/Analiza-{date}-{account}.md] as ReportMD
+    [analizy/collection-{account}-{date}.json] as CollectionJSON
 }
 
 PvPokeRankings -.-> MetaRankingsJSON : aktualizacja meta
