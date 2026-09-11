@@ -126,7 +126,7 @@ func writeMarkdownReport(path string, collection []model.Pokemon, konto string, 
 	stats := ComputeStats(collection)
 
 	// === SECTION 1 ===
-	writeSection1(&sb, collection, stats, metaData)
+	writeSection1(&sb, collection, stats, metaData, gmMap)
 
 	// === SECTION 2 ===
 	writeSection2(&sb, collection, gmMap)
@@ -151,7 +151,7 @@ func writeMarkdownReport(path string, collection []model.Pokemon, konto string, 
 	}
 }
 
-func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats, metaData *MetaData) {
+func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats, metaData *MetaData, gmMap map[string]*model.GamemasterPokemon) {
 	sb.WriteString("## 1. Ogolne podsumowanie\n\n")
 	sb.WriteString("### Podsumowanie kolekcji\n\n")
 
@@ -251,7 +251,7 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 
 	// Meta vs Collection
 	if metaData != nil && len(metaData.Rankings.Raid) > 0 {
-		rows := BuildMetaComparison(c, metaData.Rankings.Raid)
+		rows := BuildMetaComparison(c, metaData.Rankings.Raid, gmMap)
 		sb.WriteString(FormatMetaComparison(rows))
 	}
 

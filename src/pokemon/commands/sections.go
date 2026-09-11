@@ -583,7 +583,7 @@ type MetaCompareRow struct {
 }
 
 // BuildMetaComparison compares collection against meta raid attackers.
-func BuildMetaComparison(c []model.Pokemon, raidAttackers []string) []MetaCompareRow {
+func BuildMetaComparison(c []model.Pokemon, raidAttackers []string, gmMap map[string]*model.GamemasterPokemon) []MetaCompareRow {
 	// Build collection index by SpeciesID
 	bySpecies := map[string][]model.Pokemon{}
 	for _, p := range c {
@@ -603,8 +603,11 @@ func BuildMetaComparison(c []model.Pokemon, raidAttackers []string) []MetaCompar
 			tier = "S"
 		}
 
-		// Get display name from gamemaster (first char upper)
+		// Get display name from gamemaster
 		name := sid
+		if gm := gmMap[sid]; gm != nil {
+			name = gm.SpeciesName
+		}
 
 		copies := bySpecies[sid]
 		row := MetaCompareRow{
