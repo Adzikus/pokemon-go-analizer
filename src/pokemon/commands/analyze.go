@@ -171,8 +171,10 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 	sb.WriteString("### TOP 10 HUNDO\n\n")
 	hundo := filterBool(c, func(p model.Pokemon) bool { return p.IVPct == 100.0 })
 	sortedHundo := SortByCP(hundo)
+	sb.WriteString("| # | Pokemon | CP | Lucky | Purpose |\n")
+	sb.WriteString("|--:|---------|---:|:-----:|---------|\n")
 	for i, p := range TopN(sortedHundo, 10) {
-		sb.WriteString(fmt.Sprintf("%d. **%s** -- %d CP, Lucky: %s, Purpose: %s\n",
+		sb.WriteString(fmt.Sprintf("| %d | **%s** | %d | %s | %s |\n",
 			i+1, p.Species, p.CP, boolStr(p.IsLucky), purposeLabel(p)))
 	}
 	sb.WriteString("\n")
@@ -180,9 +182,11 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 	// TOP 10 CP
 	sb.WriteString("### TOP 10 CP\n\n")
 	sortedCP := SortByCP(c)
+	sb.WriteString("| # | Pokemon | CP | IV% | Lucky | Purpose |\n")
+	sb.WriteString("|--:|---------|---:|----:|:-----:|---------|\n")
 	for i, p := range TopN(sortedCP, 10) {
-		sb.WriteString(fmt.Sprintf("%d. **%s** -- %d CP, IV: %.1f%%, Lucky: %s\n",
-			i+1, p.Species, p.CP, p.IVPct, boolStr(p.IsLucky)))
+		sb.WriteString(fmt.Sprintf("| %d | **%s** | %d | %.1f%% | %s | %s |\n",
+			i+1, p.Species, p.CP, p.IVPct, boolStr(p.IsLucky), purposeLabel(p)))
 	}
 	sb.WriteString("\n")
 
@@ -190,8 +194,10 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 	sb.WriteString("### TOP 10 Dynamax\n\n")
 	dynamax := filterBool(c, func(p model.Pokemon) bool { return p.IsDynamax })
 	sortedDyn := SortByCP(dynamax)
+	sb.WriteString("| # | Pokemon | CP | IV% | Tier |\n")
+	sb.WriteString("|--:|---------|---:|----:|:----:|\n")
 	for i, p := range TopN(sortedDyn, 10) {
-		sb.WriteString(fmt.Sprintf("%d. **%s** -- %d CP, IV: %.1f%%, Tier: %s\n",
+		sb.WriteString(fmt.Sprintf("| %d | **%s** | %d | %.1f%% | %s |\n",
 			i+1, p.Species, p.CP, p.IVPct, tierOrDash(p)))
 	}
 	sb.WriteString("\n")
@@ -200,8 +206,10 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 	sb.WriteString("### TOP 10 Shadow\n\n")
 	shadow := filterBool(c, func(p model.Pokemon) bool { return p.IsShadow })
 	sortedShadow := SortByScore(shadow)
+	sb.WriteString("| # | Pokemon | CP | IV% | Tier | Score |\n")
+	sb.WriteString("|--:|---------|---:|----:|:----:|------:|\n")
 	for i, p := range TopN(sortedShadow, 10) {
-		sb.WriteString(fmt.Sprintf("%d. **%s** -- %d CP, IV: %.1f%%, Tier: %s, Score: %.1f\n",
+		sb.WriteString(fmt.Sprintf("| %d | **%s** | %d | %.1f%% | %s | %.1f |\n",
 			i+1, p.Species, p.CP, p.IVPct, tierOrDash(p), p.DevScore))
 	}
 	sb.WriteString("\n")
@@ -210,8 +218,10 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 	sb.WriteString("### TOP 10 Shiny\n\n")
 	shiny := filterBool(c, func(p model.Pokemon) bool { return p.IsShiny })
 	sortedShiny := SortByScore(shiny)
+	sb.WriteString("| # | Pokemon | CP | IV% | Tier | Lucky |\n")
+	sb.WriteString("|--:|---------|---:|----:|:----:|:-----:|\n")
 	for i, p := range TopN(sortedShiny, 10) {
-		sb.WriteString(fmt.Sprintf("%d. **%s** -- %d CP, IV: %.1f%%, Tier: %s, Lucky: %s\n",
+		sb.WriteString(fmt.Sprintf("| %d | **%s** | %d | %.1f%% | %s | %s |\n",
 			i+1, p.Species, p.CP, p.IVPct, tierOrDash(p), boolStr(p.IsLucky)))
 	}
 	sb.WriteString("\n")
@@ -233,9 +243,11 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 		return true
 	})
 	sortedPowerUp := SortByScore(powerUp)
+	sb.WriteString("| # | Pokemon | CP | IV% | Tier | Score |\n")
+	sb.WriteString("|--:|---------|---:|----:|:----:|------:|\n")
 	for i, p := range TopN(sortedPowerUp, 10) {
-		sb.WriteString(fmt.Sprintf("%d. **%s** -- %d CP, IV: %.1f%%, Tier: %s\n",
-			i+1, p.Species, p.CP, p.IVPct, tierOrDash(p)))
+		sb.WriteString(fmt.Sprintf("| %d | **%s** | %d | %.1f%% | %s | %.1f |\n",
+			i+1, p.Species, p.CP, p.IVPct, tierOrDash(p), p.DevScore))
 	}
 	sb.WriteString("\n")
 	sb.WriteString("_Wykluczone: Pokemon z Purpose=PvP na GL cap (CP≥1450) oraz Pokemon na max CP. Sortowanie wg DevScore._\n\n")
@@ -243,8 +255,10 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 	// TOP 10 Dev Score
 	sb.WriteString("### TOP 10 Dev Score\n\n")
 	sortedDev := SortByScore(c)
+	sb.WriteString("| # | Pokemon | CP | IV% | Tier | Score |\n")
+	sb.WriteString("|--:|---------|---:|----:|:----:|------:|\n")
 	for i, p := range TopN(sortedDev, 10) {
-		sb.WriteString(fmt.Sprintf("%d. **%s** -- %d CP, IV: %.1f%%, Tier: %s, Score: %.1f\n",
+		sb.WriteString(fmt.Sprintf("| %d | **%s** | %d | %.1f%% | %s | %.1f |\n",
 			i+1, p.Species, p.CP, p.IVPct, tierOrDash(p), p.DevScore))
 	}
 	sb.WriteString("\n")

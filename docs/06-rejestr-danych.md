@@ -38,6 +38,21 @@
 
 ---
 
+## Enriched Pokemon (po wzbogaceniu)
+
+| Field | Typ | Opis |
+|-------|-----|------|
+| `iv_pct` | float64 | Obliczone: `(IVAtk+IVDef+IVHP)/45*100` |
+| `is_hundo` | bool | `IVPct == 100.0` |
+| `species_id` | string | Znormalizowany ID z gamemaster |
+| `base_stats` | BaseStats | Bazowe atk/def/hp z gamemaster |
+| `meta_tier` | string | S/A/B/C z meta_rankings |
+| `family_id` | string | ID rodziny ewolucyjnej |
+| `dev_score` | float64 | Score rozwoju 0-100 (IV, Lucky, Meta, Moves, Mega/Shadow, CP, Purpose) |
+| `max_cp` | int | Max CP na lvl 50 z IV 15/15/15 (`CalculateMaxCP`) |
+
+---
+
 ## Gamemaster JSON → Internal Structures
 
 ### Pokemon Entry (z gamemaster.pokemon[])

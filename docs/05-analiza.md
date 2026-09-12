@@ -18,8 +18,8 @@ Pipeline jest wielokontowy — każdy gracz ma swój plik ODS (np. `Pokemon-GO-{
 
 | Wejście | Wyjście |
 |---------|---------|
-| `Pokemon-GO-{account}.ods` — arkusz Kolekcja | `Analiza-{date}-opencode-{account}.md` — raport 7 sekcji |
-| `data/gamemaster.json` — base stats, ruchy, CPM | `collection-{account}-{date}.json` — snapshot kolekcji |
+| `Pokemon-GO-{account}.ods` — arkusz Kolekcja | `analizy/Analiza-{date}-opencode-{account}.md` — raport 7 sekcji |
+| `data/gamemaster.json` — base stats, ruchy, CPM | `analizy/collection-{account}-{date}.json` — snapshot kolekcji |
 | `data/meta_rankings.json` — tier listy S/A/B/C | |
 
 ---
@@ -781,7 +781,7 @@ Pokemon[] (z Kroku 2)
 
 | Wejście | Wyjście per sekcja |
 |---------|-------------------|
-| `Pokemon[]` (10000 obiektów) | Sekcja 1: statystyki (count, TOP 5 listy) |
+| `Pokemon[]` (10000 obiektów) | Sekcja 1: statystyki (count, TOP 10 listy) |
 | | Sekcja 2: tier listy S/A/B/C |
 | | Sekcja 3: drużyny GL/UL/ML |
 | | Sekcja 4: transfer / zachowaj |
@@ -803,7 +803,7 @@ start
 partition "Sekcja 1: Ogolne podsumowanie" {
     :Zbierz statystyki;
     :Policz: shiny, lucky, shadow, hundo, high_iv;
-    :TOP 5: HUNDO, CP, Power-Up;
+    :TOP 10: HUNDO, CP, Dynamax, Shadow, Shiny, Power-Up, Dev Score;
 }
 
 partition "Sekcja 2: Zestawy do Rajdow" {
@@ -881,17 +881,25 @@ Zbieramy statystyki kolekcji i generujemy TOP 10 listy. Zero filtrowania — lic
 | **Rozkład celów** | `purpose_rajdy`, `purpose_pvp`, `purpose_transfer`, `purpose_kolekcja` | Ile per przeznaczenie |
 | **Rodziny** | `family_count` | Ile unikalnych rodzin ewolucyjnych |
 
-##### TOP 10 listy
+##### TOP 10 listy (tabela)
+
+Wszystkie TOP 10 są prezentowane w formacie tabel Markdown.
 
 | Lista | Filtr | Sortowanie | Kolumny |
 |-------|-------|------------|---------|
-| **TOP 10 HUNDO** | `is_hundo = true` | CP DESC | species, cp, lucky, purpose |
-| **TOP 10 CP** | Brak | CP DESC | species, cp, iv%, lucky |
-| **TOP 10 Dynamax** | `is_dynamax = true` | CP DESC | species, cp, iv%, tier |
-| **TOP 10 Shadow** | `is_shadow = true` | dev_score DESC | species, cp, iv%, tier, meta |
-| **TOP 10 Shiny** | `is_shiny = true` | dev_score DESC | species, cp, iv%, tier, lucky |
-| **TOP 10 Power-Up** | `iv_pct ≥ 90%, cp < 2500, tier in (S,A)` | dev_score DESC | species, cp, iv%, tier |
-| **TOP 10 Dev Score** | Brak | dev_score DESC | species, cp, iv%, tier, score |
+| **TOP 10 HUNDO** | `iv_pct == 100.0` | CP DESC | #, Pokemon, CP, Lucky, Purpose |
+| **TOP 10 CP** | Brak | CP DESC | #, Pokemon, CP, IV%, Lucky, Purpose |
+| **TOP 10 Dynamax** | `is_dynamax == true` | CP DESC | #, Pokemon, CP, IV%, Tier |
+| **TOP 10 Shadow** | `is_shadow == true` | dev_score DESC | #, Pokemon, CP, IV%, Tier, Score |
+| **TOP 10 Shiny** | `is_shiny == true` | dev_score DESC | #, Pokemon, CP, IV%, Tier, Lucky |
+| **TOP 10 Power-Up** | `iv_pct ≥ 90%, cp < 2500`, exclude max CP, exclude PvP at GL cap | dev_score DESC | #, Pokemon, CP, IV%, Tier, Score |
+| **TOP 10 Dev Score** | Brak | dev_score DESC | #, Pokemon, CP, IV%, Tier, Score |
+
+**Power-Up wykluczenia:**
+- Pokemon na max CP (`cp >= max_cp`) — nie ma sensu podciągać
+- Pokemon z Purpose=PvP na GL cap (`cp >= 1450`) — podciąganie wyrzuca z GL
+
+**Meta vs Collection** — tabela porównawcza Raid Attackers TOP 20 z kolekcją. Kolumny: #, Pokemon, Tier, Masz?, Ile, Najl. IV, Lucky, Score. Na końcu: Meta Coverage %.
 
 ##### Diagram — Sekcja 1
 
@@ -2015,7 +2023,7 @@ CollectionSnapshot:
 
 | # | Nagłówek | Zawartość |
 |---|----------|-----------|
-| **1** | `## 1. Ogolne podsumowanie` | Statystyki kolekcji, TOP 5 HUNDO, TOP 5 wg CP, TOP 5 power-up, uwagi ogólne |
+| **1** | `## 1. Ogolne podsumowanie` | Statystyki kolekcji, TOP 10 HUNDO, TOP 10 wg CP, TOP 10 Dynamax, TOP 10 Shadow, TOP 10 Shiny, TOP 10 Power-Up, TOP 10 Dev Score, Meta vs Collection, uwagi ogólne |
 | **2** | `## 2. Zestawy do Rajdow` | Tier List (S/A/B/C) z Pokemon po filtrze purpose |
 | **3** | `## 3. Zestawy do PvP` | Great/Ultra/Master League, druzyny 3v3 (Lead/Switch/Closer) |
 | **4** | `## 4. Kandydaci do Transferu` | Bezpieczne (max 30) + NIE TRANSFERUJ (zasady) |
@@ -2048,32 +2056,48 @@ CollectionSnapshot:
 - **Rodziny ewolucyjne:** {family_count}
 
 ### TOP 10 HUNDO
-1. **{species}** — {cp} CP, Lucky: {lucky}, Purpose: {purpose}
-2. ...
+| # | Pokemon | CP | Lucky | Purpose |
+|--:|---------|---:|:-----:|---------|
+| 1 | **{species}** | {cp} | {lucky} | {purpose} |
+| ... | ... | ... | ... | ... |
 
 ### TOP 10 CP
-1. **{species}** — {cp} CP, IV: {iv_pct}%, Lucky: {lucky}
-2. ...
+| # | Pokemon | CP | IV% | Lucky | Purpose |
+|--:|---------|---:|----:|:-----:|---------|
+| 1 | **{species}** | {cp} | {iv_pct}% | {lucky} | {purpose} |
+| ... | ... | ... | ... | ... | ... |
 
 ### TOP 10 Dynamax
-1. **{species}** — {cp} CP, IV: {iv_pct}%, Tier: {meta_tier}
-2. ...
+| # | Pokemon | CP | IV% | Tier |
+|--:|---------|---:|----:|:----:|
+| 1 | **{species}** | {cp} | {iv_pct}% | {meta_tier} |
+| ... | ... | ... | ... | ... |
 
 ### TOP 10 Shadow
-1. **{species}** — {cp} CP, IV: {iv_pct}%, Tier: {meta_tier}, Meta: {meta}
-2. ...
+| # | Pokemon | CP | IV% | Tier | Score |
+|--:|---------|---:|----:|:----:|------:|
+| 1 | **{species}** | {cp} | {iv_pct}% | {meta_tier} | {dev_score} |
+| ... | ... | ... | ... | ... | ... |
 
 ### TOP 10 Shiny
-1. **{species}** — {cp} CP, IV: {iv_pct}%, Tier: {meta_tier}, Lucky: {lucky}
-2. ...
+| # | Pokemon | CP | IV% | Tier | Lucky |
+|--:|---------|---:|----:|:----:|:-----:|
+| 1 | **{species}** | {cp} | {iv_pct}% | {meta_tier} | {lucky} |
+| ... | ... | ... | ... | ... | ... |
 
 ### TOP 10 Power-Up
-1. **{species}** — {cp} CP, IV: {iv_pct}%, Tier: {meta_tier}
-2. ...
+| # | Pokemon | CP | IV% | Tier | Score |
+|--:|---------|---:|----:|:----:|------:|
+| 1 | **{species}** | {cp} | {iv_pct}% | {meta_tier} | {dev_score} |
+| ... | ... | ... | ... | ... | ... |
+
+_Wykluczone: Pokemon z Purpose=PvP na GL cap (CP≥1450) oraz Pokemon na max CP. Sortowanie wg DevScore._
 
 ### TOP 10 Dev Score
-1. **{species}** — {cp} CP, IV: {iv_pct}%, Tier: {meta_tier}, Score: {dev_score}
-2. ...
+| # | Pokemon | CP | IV% | Tier | Score |
+|--:|---------|---:|----:|:----:|------:|
+| 1 | **{species}** | {cp} | {iv_pct}% | {meta_tier} | {dev_score} |
+| ... | ... | ... | ... | ... | ... |
 
 ### Uwagi ogolne
 - Lucky rate: {lucky_pct}% ({lucky_count}/{total})
@@ -2287,7 +2311,7 @@ partition "Zapis Markdown" {
 
     partition "Sekcja 1: Ogolne podsumowanie" {
         :Statystyki kolekcji;
-        :TOP 5 HUNDO / CP / Power-Up;
+        :TOP 10 HUNDO / CP / Dynamax / Shadow / Shiny / Power-Up / Dev Score;
         :Uwagi ogolne;
     }
 
