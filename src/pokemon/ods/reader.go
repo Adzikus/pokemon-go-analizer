@@ -160,3 +160,12 @@ func (o *ODS) SheetNames() []string {
 	}
 	return names
 }
+
+// VerifyBackupZIP checks if a file is a valid ODS (ZIP with content.xml).
+func VerifyBackupZIP(path string) error {
+	_, err := Read(path)
+	if err != nil {
+		return fmt.Errorf("otworz ODS: %w", err)
+	}
+	return nil
+}

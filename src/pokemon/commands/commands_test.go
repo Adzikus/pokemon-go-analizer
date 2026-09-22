@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/adzik/pokemon/ods"
+	"github.com/adzik/pokemon/pkg/analysis"
+	"github.com/adzik/pokemon/pkg/gamemaster"
 )
 
 func TestCalculateCP(t *testing.T) {
@@ -24,33 +26,33 @@ func TestCalculateCP(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cp := CalculateCP(tt.baseAtk, tt.baseDef, tt.baseHP, tt.ivAtk, tt.ivDef, tt.ivHP, tt.level)
+			cp := analysis.CalculateCP(tt.baseAtk, tt.baseDef, tt.baseHP, tt.ivAtk, tt.ivDef, tt.ivHP, tt.level)
 			if cp <= 0 {
-				t.Errorf("CalculateCP() = %d, want > 0", cp)
+				t.Errorf("analysis.CalculateCP() = %d, want > 0", cp)
 			}
 		})
 	}
 }
 
 func TestCalculateCPZeroIVs(t *testing.T) {
-	cp := CalculateCP(100, 100, 100, 0, 0, 0, 50)
+	cp := analysis.CalculateCP(100, 100, 100, 0, 0, 0, 50)
 	if cp <= 0 {
-		t.Errorf("CalculateCP(0 IVs) = %d, want > 0", cp)
+		t.Errorf("analysis.CalculateCP(0 IVs) = %d, want > 0", cp)
 	}
 }
 
 func TestCalculateCPMaxIVsHigher(t *testing.T) {
-	cpLow := CalculateCP(100, 100, 100, 0, 0, 0, 50)
-	cpHigh := CalculateCP(100, 100, 100, 15, 15, 15, 50)
+	cpLow := analysis.CalculateCP(100, 100, 100, 0, 0, 0, 50)
+	cpHigh := analysis.CalculateCP(100, 100, 100, 15, 15, 15, 50)
 	if cpHigh <= cpLow {
 		t.Errorf("max IVs CP (%d) should be > min IVs CP (%d)", cpHigh, cpLow)
 	}
 }
 
 func TestCalculateMaxCP(t *testing.T) {
-	cp := CalculateMaxCP(118, 111, 128, 15, 15, 15)
+	cp := analysis.CalculateMaxCP(118, 111, 128, 15, 15, 15)
 	if cp <= 0 {
-		t.Errorf("CalculateMaxCP() = %d, want > 0", cp)
+		t.Errorf("analysis.CalculateMaxCP() = %d, want > 0", cp)
 	}
 }
 
@@ -209,9 +211,9 @@ func TestNormalizeName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got := normalizeName(tt.input)
+			got := gamemaster.NormalizeName(tt.input)
 			if got != tt.want {
-				t.Errorf("normalizeName(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("gamemaster.NormalizeName(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -302,22 +304,22 @@ func TestLoadMetaCacheNoFetchedAt(t *testing.T) {
 func TestGetCPM(t *testing.T) {
 	// CPM table is linear in this implementation
 	// L1 = index 0, L50 = index 98
-	cpm1 := GetCPM(1)
+	cpm1 := analysis.GetCPM(1)
 	if cpm1 < 0.09 || cpm1 > 0.10 {
-		t.Errorf("GetCPM(1) = %f, want ~0.094", cpm1)
+		t.Errorf("analysis.GetCPM(1) = %f, want ~0.094", cpm1)
 	}
-	cpm50 := GetCPM(50)
+	cpm50 := analysis.GetCPM(50)
 	if cpm50 < 1.07 || cpm50 > 1.09 {
-		t.Errorf("GetCPM(50) = %f, want ~1.076", cpm50)
+		t.Errorf("analysis.GetCPM(50) = %f, want ~1.076", cpm50)
 	}
 }
 
 func TestGetCPMNonDecreasing(t *testing.T) {
 	var prev float64
 	for level := 1.0; level <= 50; level += 0.5 {
-		cpm := GetCPM(level)
+		cpm := analysis.GetCPM(level)
 		if cpm < prev {
-			t.Errorf("GetCPM(%f) = %f < previous %f", level, cpm, prev)
+			t.Errorf("analysis.GetCPM(%f) = %f < previous %f", level, cpm, prev)
 		}
 		prev = cpm
 	}

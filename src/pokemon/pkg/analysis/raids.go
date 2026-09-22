@@ -1,4 +1,4 @@
-package commands
+package analysis
 
 import (
 	"sort"
@@ -6,12 +6,39 @@ import (
 
 	"github.com/adzik/pokemon/config"
 	"github.com/adzik/pokemon/model"
+	"github.com/adzik/pokemon/pkg/gamemaster"
 )
 
-// Type effectiveness multipliers for raids (attacking)
+// Type effectiveness: super effective vs type
+var SuperEffective = map[string][]string{
+	"normal":   {},
+	"fire":     {"grass", "ice", "bug", "steel"},
+	"water":    {"fire", "ground", "rock"},
+	"electric": {"water", "flying"},
+	"grass":    {"water", "ground", "rock"},
+	"ice":      {"grass", "ground", "flying", "dragon"},
+	"fighting": {"normal", "ice", "rock", "dark", "steel"},
+	"poison":   {"grass", "fairy"},
+	"ground":   {"fire", "electric", "poison", "rock", "steel"},
+	"flying":   {"grass", "fighting", "bug"},
+	"psychic":  {"fighting", "poison"},
+	"bug":      {"grass", "psychic", "dark"},
+	"rock":     {"fire", "ice", "flying", "bug"},
+	"ghost":    {"psychic", "ghost"},
+	"dragon":   {"dragon"},
+	"dark":     {"psychic", "ghost"},
+	"steel":    {"ice", "rock", "fairy"},
+	"fairy":    {"fighting", "dragon", "dark"},
+}
+
+var BossTypes = []string{
+	"normal", "fire", "water", "electric", "grass", "ice",
+	"fighting", "poison", "ground", "flying", "psychic",
+	"bug", "rock", "ghost", "dragon", "dark", "steel", "fairy",
+}
+
 const NeutralEff = 1.0
 
-// CounterType returns the types that are super effective against a boss type.
 func CounterType(bossType string) []string {
 	counters := map[string][]string{
 		"bug":      {"fire", "flying", "rock"},
@@ -36,7 +63,6 @@ func CounterType(bossType string) []string {
 	return counters[bossType]
 }
 
-// IsSuperEffective checks if moveType is super effective vs bossType.
 func IsSuperEffective(moveType, bossType string) bool {
 	for _, t := range CounterType(bossType) {
 		if moveType == t {
@@ -46,7 +72,6 @@ func IsSuperEffective(moveType, bossType string) bool {
 	return false
 }
 
-// IsSTAB checks if move type matches any of the Pokemon's types.
 func IsSTAB(moveType string, pokemonTypes []string) bool {
 	for _, t := range pokemonTypes {
 		if moveType == t {
@@ -56,7 +81,6 @@ func IsSTAB(moveType string, pokemonTypes []string) bool {
 	return false
 }
 
-// Effectiveness returns the type effectiveness multiplier.
 func Effectiveness(moveType, bossType string) float64 {
 	if bossType == "" {
 		return NeutralEff
@@ -67,20 +91,17 @@ func Effectiveness(moveType, bossType string) float64 {
 	return NeutralEff
 }
 
-// RaidDPSResult holds the DPS calculation result for a Pokemon.
 type RaidDPSResult struct {
 	Pokemon     model.Pokemon
-	DPS         float64 // DPS with current moves
-	OptimalDPS  float64 // DPS with best possible moves
-	FastMove    string  // current fast move name
-	ChargedMove string  // current charged move name
-	BestFast    string  // optimal fast move name
-	BestCharged string  // optimal charged move name
-	SuperEff    bool    // any move is super effective?
+	DPS         float64
+	OptimalDPS  float64
+	FastMove    string
+	ChargedMove string
+	BestFast    string
+	BestCharged string
+	SuperEff    bool
 }
 
-// CalculateMoveDPS calculates DPS for a specific fast+charged move combination.
-// Uses proper ATK/DEF ratio against Tier 5 boss (DEF ~162.3).
 func CalculateMoveDPS(
 	baseAtk, ivAtk int,
 	fastPower, fastCD, fastEnergy int,
@@ -90,19 +111,16 @@ func CalculateMoveDPS(
 	bossType string,
 	isShadow bool,
 ) float64 {
-	atk := float64(baseAtk + ivAtk) * CPM_L40
+	atk := float64(baseAtk+ivAtk) * CPM_L40
 	if isShadow {
 		atk *= config.Global.Raids.ShadowATKBonus
 	}
 
-	// ATK/DEF ratio against Tier 5 boss
 	atkDefRatio := atk / config.Global.Raids.BossDefenseRef
 
-	// Fast move DPS (damage per second)
 	fastDmgPerHit := 0.5 * float64(fastPower) * atkDefRatio
 	fastDPS := fastDmgPerHit / (float64(fastCD) / 1000.0)
 
-	// Charged move contribution (accounting for energy generation)
 	chargedDPSContrib := 0.0
 	if fastEnergy > 0 && chargedEnergy > 0 {
 		timeToCharge := float64(chargedEnergy) / float64(fastEnergy) * (float64(fastCD) / 1000.0)
@@ -112,13 +130,11 @@ func CalculateMoveDPS(
 
 	rawDPS := fastDPS + chargedDPSContrib
 
-	// Apply STAB (if either fast or charged has STAB, apply bonus)
 	stab := 1.0
 	if IsSTAB(fastType, pokemonTypes) || IsSTAB(chargedType, pokemonTypes) {
 		stab = 1.2
 	}
 
-	// Apply type effectiveness (use best of fast/charged)
 	eff := NeutralEff
 	if bossType != "" {
 		fastEff := Effectiveness(fastType, bossType)
@@ -133,8 +149,6 @@ func CalculateMoveDPS(
 	return rawDPS * stab * eff
 }
 
-// CalculateMoveDPSRaw calculates pure move DPS without Pokemon stats.
-// Returns fast move DPS and charged move DPS as raw values.
 func CalculateMoveDPSRaw(
 	fastPower, fastCD, fastEnergy int,
 	chargedPower, chargedCD, chargedEnergy int,
@@ -150,13 +164,11 @@ func CalculateMoveDPSRaw(
 	return fastDPS, chargedDPS
 }
 
-// normalizeMoveID converts a move name to a gamemaster moveId format.
 func normalizeMoveID(name string) string {
 	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(name), " ", "_"))
 }
 
-// CalculatePokemonDPS calculates DPS for a Pokemon with its actual moves.
-func CalculatePokemonDPS(p model.Pokemon, gmMap map[string]*model.GamemasterPokemon, moveMap map[string]*MoveEntry, bossType string) (float64, string, string) {
+func CalculatePokemonDPS(p model.Pokemon, gmMap map[string]*model.GamemasterPokemon, moveMap map[string]*gamemaster.MoveEntry, bossType string) (float64, string, string) {
 	gm := gmMap[p.SpeciesID]
 	if gm == nil {
 		return 0, "", ""
@@ -184,17 +196,15 @@ func CalculatePokemonDPS(p model.Pokemon, gmMap map[string]*model.GamemasterPoke
 	return dps, fast.Name, charged.Name
 }
 
-// CalculateEffectiveATK returns the Pokemon's effective ATK stat.
 func CalculateEffectiveATK(p model.Pokemon) float64 {
-	atk := float64(p.BaseStats.Atk + p.IVAtk) * CPM_L40
+	atk := float64(p.BaseStats.Atk+p.IVAtk) * CPM_L40
 	if p.IsShadow {
 		atk *= config.Global.Raids.ShadowATKBonus
 	}
 	return atk
 }
 
-// FindOptimalMoves finds the best fast+charged move combination for DPS.
-func FindOptimalMoves(p model.Pokemon, gmMap map[string]*model.GamemasterPokemon, moveMap map[string]*MoveEntry, bossType string) (string, string, float64) {
+func FindOptimalMoves(p model.Pokemon, gmMap map[string]*model.GamemasterPokemon, moveMap map[string]*gamemaster.MoveEntry, bossType string) (string, string, float64) {
 	gm := gmMap[p.SpeciesID]
 	if gm == nil {
 		return "", "", 0
@@ -236,11 +246,10 @@ func FindOptimalMoves(p model.Pokemon, gmMap map[string]*model.GamemasterPokemon
 	return bestFast, bestCharged, bestDPS
 }
 
-// FindBestCounters returns the best raid counters from collection for a boss type.
 func FindBestCounters(
 	collection []model.Pokemon,
 	gmMap map[string]*model.GamemasterPokemon,
-	moveMap map[string]*MoveEntry,
+	moveMap map[string]*gamemaster.MoveEntry,
 	bossType string,
 	n int,
 ) []RaidDPSResult {
@@ -263,7 +272,7 @@ func FindBestCounters(
 		if bossType != "" {
 			superEff = IsSuperEffective(fast, bossType) || IsSuperEffective(charged, bossType)
 		}
-		_ = IsSTAB(fast, pokemonTypes) // used for future reference
+		_ = IsSTAB(fast, pokemonTypes)
 
 		results = append(results, RaidDPSResult{
 			Pokemon:     p,
@@ -287,17 +296,15 @@ func FindBestCounters(
 	return results
 }
 
-// RaidRankings holds per-type raid rankings.
 type RaidRankings struct {
-	ByType    map[string][]RaidDPSResult // bossType -> TOP N counters
-	Universal []RaidDPSResult            // effectiveness=1.0 for all
+	ByType    map[string][]RaidDPSResult
+	Universal []RaidDPSResult
 }
 
-// BuildRaidRankings builds per-type raid rankings for all 18 boss types + universal.
 func BuildRaidRankings(
 	collection []model.Pokemon,
 	gmMap map[string]*model.GamemasterPokemon,
-	moveMap map[string]*MoveEntry,
+	moveMap map[string]*gamemaster.MoveEntry,
 	n int,
 ) RaidRankings {
 	rankings := RaidRankings{

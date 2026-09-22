@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/adzik/pokemon/config"
+	"github.com/adzik/pokemon/pkg/gamemaster"
 )
 
 type gamemasterCacheData struct {
@@ -91,7 +92,7 @@ func RunUpdateGamemaster(args []string, projectRoot string) {
 	}
 
 	// 6. Print stats
-	var gm GamemasterData
+	var gm gamemaster.GamemasterData
 	if err := json.Unmarshal(body, &gm); err == nil {
 		fmt.Printf("Zapisano: %s\n", gmPath)
 		fmt.Printf("  Gatunki: %d\n", len(gm.Pokemon))

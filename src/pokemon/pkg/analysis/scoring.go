@@ -1,4 +1,4 @@
-package commands
+package analysis
 
 import (
 	"math"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/adzik/pokemon/config"
 	"github.com/adzik/pokemon/model"
+	"github.com/adzik/pokemon/pkg/gamemaster"
 )
 
 // CPM_TABLE: level 1-50 in 0.5 increments, index 0 = L1, index 99 = L50
@@ -29,37 +30,30 @@ var CPM_TABLE = []float64{
 	1.056000000, 1.066000000, 1.076000000, 1.086000000, 1.096000000, 1.106000000,
 }
 
-// CPM for level 50 (index 99)
 const CPM_L50 = 0.971700003
 
-// CPM for key league caps
 const (
-	CPM_L15 = 0.375999998 // Great League cap
-	CPM_L20 = 0.595999998 // Raid/Trade level
-	CPM_L25 = 0.675999998 // Weather boosted
-	CPM_L40 = 0.791700003 // Old max
+	CPM_L15 = 0.375999998
+	CPM_L20 = 0.595999998
+	CPM_L25 = 0.675999998
+	CPM_L40 = 0.791700003
 )
 
 func GetCPM(level float64) float64 {
-	idx := max(int((level - 1) * 2), 0)
-
+	idx := max(int((level-1)*2), 0)
 	if idx >= len(CPM_TABLE)-1 {
 		return CPM_TABLE[len(CPM_TABLE)-1]
 	}
-
 	frac := (level-1)*2 - float64(idx)
-	
 	if frac < 0 {
 		frac = 0
 	}
-	
 	if frac > 1 {
 		frac = 1
 	}
 	return CPM_TABLE[idx]*(1-frac) + CPM_TABLE[idx+1]*frac
 }
 
-// CalculateCP computes CP at a given level using the standard formula.
 func CalculateCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP int, level float64) int {
 	atk := float64(baseAtk + ivAtk)
 	def := float64(baseDef + ivDef)
@@ -68,26 +62,22 @@ func CalculateCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP int, level float64
 	return int((atk * math.Sqrt(def) * math.Sqrt(hp) * cpm * cpm) / 10)
 }
 
-// CalculateMaxCP returns CP at level 50.
 func CalculateMaxCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP int) int {
 	return CalculateCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, 50)
 }
 
-// ScoreResult holds the scoring breakdown for a Pokemon.
 type ScoreResult struct {
 	Score      float64
-	IVScore    float64 // 0-15
-	LuckyPts   float64 // 0-20
-	MetaPts    float64 // 0-20
-	MovePts    float64 // 0-15
-	MegaPts    float64 // 0-10
-	CPPts      float64 // 0-10
-	PurposePts float64 // 0-10
+	IVScore    float64
+	LuckyPts   float64
+	MetaPts    float64
+	MovePts    float64
+	MegaPts    float64
+	CPPts      float64
+	PurposePts float64
 	Notes      []string
 }
 
-// CalculateContextScore computes a score for a specific context (Raid/GL/UL/ML).
-// Uses the Pokemon's tier in that context.
 func CalculateContextScore(p model.Pokemon, tier string, gmMap map[string]*model.GamemasterPokemon) ScoreResult {
 	var r ScoreResult
 
@@ -101,7 +91,7 @@ func CalculateContextScore(p model.Pokemon, tier string, gmMap map[string]*model
 		r.LuckyPts = config.Global.Scoring.LuckyPts
 	}
 
-	r.MetaPts = TierToScore(tier)
+	r.MetaPts = gamemaster.TierToScore(tier)
 
 	gmPokemon := gmMap[p.SpeciesID]
 	if gmPokemon != nil {
@@ -137,9 +127,7 @@ func CalculateContextScore(p model.Pokemon, tier string, gmMap map[string]*model
 	return r
 }
 
-// CalculateDevScore computes the 0-100 development score for a Pokemon.
-// Uses Purpose to pick the relevant tier, or best-of if no Purpose.
-func CalculateDevScore(p model.Pokemon, gmMap map[string]*model.GamemasterPokemon, metaCats MetaTiersByCategory) ScoreResult {
+func CalculateDevScore(p model.Pokemon, gmMap map[string]*model.GamemasterPokemon, metaCats gamemaster.MetaTiersByCategory) ScoreResult {
 	if p.Purpose == "Transfer" || p.Purpose == "Kolekcja" {
 		var r ScoreResult
 		r.Notes = append(r.Notes, "Transfer/Kolekcja — nie inwestuj")
@@ -150,8 +138,7 @@ func CalculateDevScore(p model.Pokemon, gmMap map[string]*model.GamemasterPokemo
 	return CalculateContextScore(p, tier, gmMap)
 }
 
-// resolveTierForPurpose picks the best tier based on Pokemon's Purpose and CP.
-func resolveTierForPurpose(p model.Pokemon, metaCats MetaTiersByCategory) string {
+func resolveTierForPurpose(p model.Pokemon, metaCats gamemaster.MetaTiersByCategory) string {
 	purposeLower := strings.ToLower(p.Purpose)
 
 	switch purposeLower {
@@ -198,16 +185,6 @@ func isMoveAvailable(move string, available []string) bool {
 	return false
 }
 
-func getFamilyMembers(familyID string, gmMap map[string]*model.GamemasterPokemon) []string {
-	var members []string
-	for sid, gm := range gmMap {
-		if gm.Family != nil && gm.Family.ID == familyID {
-			members = append(members, sid)
-		}
-	}
-	return members
-}
-
 // SortByScore sorts collection by dev_score DESC, then IV% DESC, then CP DESC.
 func SortByScore(c []model.Pokemon) []model.Pokemon {
 	sorted := make([]model.Pokemon, len(c))
@@ -225,16 +202,13 @@ func SortByScore(c []model.Pokemon) []model.Pokemon {
 }
 
 // EnrichWithScores computes per-context scores, DevScore, and raid DPS for all Pokemon.
-func EnrichWithScores(collection []model.Pokemon, gmMap map[string]*model.GamemasterPokemon, moveMap map[string]*MoveEntry, metaCats MetaTiersByCategory) []model.Pokemon {
+func EnrichWithScores(collection []model.Pokemon, gmMap map[string]*model.GamemasterPokemon, moveMap map[string]*gamemaster.MoveEntry, metaCats gamemaster.MetaTiersByCategory) []model.Pokemon {
 	for i := range collection {
 		p := &collection[i]
 
 		p.MaxCP = CalculateMaxCP(p.BaseStats.Atk, p.BaseStats.Def, p.BaseStats.HP, p.IVAtk, p.IVDef, p.IVHP)
-
-		// Effective ATK
 		p.EffectiveATK = CalculateEffectiveATK(*p)
 
-		// Move DPS (pure, no Pokemon stats)
 		fast := moveMap[normalizeMoveID(p.FastMove)]
 		charged := moveMap[normalizeMoveID(p.Charged1)]
 		if fast != nil && charged != nil {
@@ -257,11 +231,9 @@ func EnrichWithScores(collection []model.Pokemon, gmMap map[string]*model.Gamema
 		devResult := CalculateDevScore(*p, gmMap, metaCats)
 		p.DevScore = devResult.Score
 
-		// Raid DPS (universal, no type bonus)
 		dps, _, _ := CalculatePokemonDPS(*p, gmMap, moveMap, "")
 		p.RaidDPS = dps
 
-		// Optimal DPS
 		_, _, optimalDPS := FindOptimalMoves(*p, gmMap, moveMap, "")
 		p.RaidDPSOptimal = optimalDPS
 	}

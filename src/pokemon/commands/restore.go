@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/adzik/pokemon/ods"
 )
 
 func RunRestore(args []string, projectRoot string) {
@@ -54,7 +56,7 @@ func RunRestore(args []string, projectRoot string) {
 		os.Exit(1)
 	}
 
-	if err := VerifyBackupZIP(backupPath); err != nil {
+	if err := ods.VerifyBackupZIP(backupPath); err != nil {
 		fmt.Fprintf(os.Stderr, "FAIL: Backup jest uszkodzony: %v\n", err)
 		os.Exit(1)
 	}

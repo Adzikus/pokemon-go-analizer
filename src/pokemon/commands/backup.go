@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/adzik/pokemon/config"
+	"github.com/adzik/pokemon/ods"
 )
 
 func RunBackup(args []string, projectRoot string) {
@@ -68,7 +69,7 @@ func RunBackup(args []string, projectRoot string) {
 		os.Exit(1)
 	}
 
-	if err := VerifyBackupZIP(backupPath); err != nil {
+	if err := ods.VerifyBackupZIP(backupPath); err != nil {
 		os.Remove(backupPath)
 		fmt.Fprintf(os.Stderr, "FAIL: Weryfikacja backupu: %v\n", err)
 		os.Exit(1)

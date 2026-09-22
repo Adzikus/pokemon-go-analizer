@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/adzik/pokemon/ods"
+	"github.com/adzik/pokemon/pkg/gamemaster"
 )
 
 func RunUpdate(args []string, projectRoot string) {
@@ -121,11 +122,11 @@ func injectCollection(path string, collectionRows [][]string) error {
 	projectRoot := filepath.Dir(path) // e.g., /home/adzik/Repozytoria/Pokemon-GO
 	gmPath := filepath.Join(projectRoot, "data", "gamemaster.json")
 
-	gmData, err := LoadGamemaster(gmPath)
+	gmData, err := gamemaster.LoadGamemaster(gmPath)
 	if err != nil {
 		return fmt.Errorf("load gamemaster: %w", err)
 	}
-	gmMap := BuildGamemasterMap(gmData)
+	gmMap := gamemaster.BuildGamemasterMap(gmData)
 
 	fastMap, chargedMap, moveLookup := buildMoveMaps(gmData)
 	entries := prepareEntries(gmData, gmMap, moveLookup)

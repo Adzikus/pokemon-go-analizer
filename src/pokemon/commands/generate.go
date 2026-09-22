@@ -10,6 +10,7 @@ import (
 
 	"github.com/adzik/pokemon/model"
 	"github.com/adzik/pokemon/ods"
+	"github.com/adzik/pokemon/pkg/gamemaster"
 )
 
 func RunGenerate(args []string, projectRoot string) {
@@ -24,12 +25,12 @@ func RunGenerate(args []string, projectRoot string) {
 
 	gmPath := filepath.Join(projectRoot, "data", "gamemaster.json")
 
-	gmData, err := LoadGamemaster(gmPath)
+	gmData, err := gamemaster.LoadGamemaster(gmPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "FAIL: Gamemaster: %v\n", err)
 		os.Exit(1)
 	}
-	gmMap := BuildGamemasterMap(gmData)
+	gmMap := gamemaster.BuildGamemasterMap(gmData)
 
 	// Prepare move lookup maps
 	fastMap, chargedMap, moveLookup := buildMoveMaps(gmData)
@@ -118,7 +119,7 @@ type speciesEntry struct {
 	IsShadow   bool
 }
 
-func prepareEntries(gm *GamemasterData, gmMap map[string]*model.GamemasterPokemon, moveLookup map[string]string) []speciesEntry {
+func prepareEntries(gm *gamemaster.GamemasterData, gmMap map[string]*model.GamemasterPokemon, moveLookup map[string]string) []speciesEntry {
 	forceReleased := map[string]bool{
 		"ditto": true, "spewpa": true, "arrokuda": true, "cramorant": true,
 	}
@@ -215,7 +216,7 @@ func capitalize(s string) string {
 // Move lookup (populated at init)
 var moveLookup map[string]string
 
-func buildMoveMaps(gm *GamemasterData) (fastMap map[string][]string, chargedMap map[string][]string, lookup map[string]string) {
+func buildMoveMaps(gm *gamemaster.GamemasterData) (fastMap map[string][]string, chargedMap map[string][]string, lookup map[string]string) {
 	lookup = make(map[string]string)
 	fastMap = make(map[string][]string)
 	chargedMap = make(map[string][]string)
@@ -554,7 +555,7 @@ func sqrt(x float64) float64 {
 
 // --- Ruchy Sheet ---
 
-func buildRuchySheet(gm *GamemasterData) ods.SheetDef {
+func buildRuchySheet(gm *gamemaster.GamemasterData) ods.SheetDef {
 	cols := []ods.ColDef{
 		{Width: 3.6}, // A: Name
 		{Width: 2.4}, // B: Type
