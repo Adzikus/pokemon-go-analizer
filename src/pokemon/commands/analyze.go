@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adzik/pokemon/config"
 	"github.com/adzik/pokemon/model"
 	"github.com/adzik/pokemon/ods"
 )
@@ -41,6 +42,7 @@ func RunAnalyze(args []string, projectRoot string) {
 		os.Exit(1)
 	}
 	gmMap := BuildGamemasterMap(gmData)
+	moveMap := BuildMoveMap(gmData)
 
 	metaData, err := LoadMeta(metaPath)
 	if err != nil {
@@ -48,6 +50,7 @@ func RunAnalyze(args []string, projectRoot string) {
 		os.Exit(1)
 	}
 	metaTiers := BuildMetaTiers(metaData)
+	metaCats := BuildMetaTiersByCategory(metaData)
 
 	doc, err := ods.Read(path)
 	if err != nil {
@@ -61,10 +64,10 @@ func RunAnalyze(args []string, projectRoot string) {
 		os.Exit(1)
 	}
 
-	collection := ParseCollection(sheet, gmMap, metaTiers)
+	collection := ParseCollection(sheet, gmMap, metaCats)
 
-	// Enrich with dev_score
-	EnrichWithScores(collection, gmMap, metaTiers)
+	// Enrich with per-context scores and raid DPS
+	EnrichWithScores(collection, gmMap, moveMap, metaCats)
 
 	now := time.Now()
 	dateStr := now.Format("20060102")
@@ -91,8 +94,8 @@ func RunAnalyze(args []string, projectRoot string) {
 	writeJSONSnapshot(jsonPath, collection, kontoName)
 
 	// Markdown report
-	mdPath := filepath.Join(analizyDir, fmt.Sprintf("Analiza-%s-opencode-%s.md", dateStr, kontoName))
-	writeMarkdownReport(mdPath, collection, kontoName, gmData, gmMap, metaData, metaTiers)
+	mdPath := filepath.Join(analizyDir, fmt.Sprintf("Analiza-%s-%s-%s.md", dateStr, config.Global.Report.ModelName, kontoName))
+	writeMarkdownReport(mdPath, collection, kontoName, gmData, gmMap, moveMap, metaData, metaTiers, metaCats)
 
 	fmt.Printf("SUCCESS: Wygenerowano dla %s (%d Pokemon)\n", kontoName, len(collection))
 	fmt.Printf("  JSON: %s\n", jsonPath)
@@ -116,7 +119,17 @@ func writeJSONSnapshot(path string, collection []model.Pokemon, konto string) {
 	}
 }
 
-func writeMarkdownReport(path string, collection []model.Pokemon, konto string, gm *GamemasterData, gmMap map[string]*model.GamemasterPokemon, metaData *MetaData, metaTiers map[string]string) {
+func writeMarkdownReport(
+	path string,
+	collection []model.Pokemon,
+	konto string,
+	gm *GamemasterData,
+	gmMap map[string]*model.GamemasterPokemon,
+	moveMap map[string]*MoveEntry,
+	metaData *MetaData,
+	metaTiers map[string]string,
+	metaCats MetaTiersByCategory,
+) {
 	var sb strings.Builder
 	dateStr := time.Now().Format("2006-01-02")
 
@@ -129,7 +142,7 @@ func writeMarkdownReport(path string, collection []model.Pokemon, konto string, 
 	writeSection1(&sb, collection, stats, metaData, gmMap)
 
 	// === SECTION 2 ===
-	writeSection2(&sb, collection, gmMap)
+	writeSection2(&sb, collection, gmMap, moveMap)
 
 	// === SECTION 3 ===
 	writeSection3(&sb, collection)
@@ -141,7 +154,7 @@ func writeMarkdownReport(path string, collection []model.Pokemon, konto string, 
 	writeSection5(&sb, collection, gm, metaData)
 
 	// === SECTION 6 ===
-	writeSection6(&sb, collection, gmMap, metaTiers)
+	writeSection6(&sb, collection, gmMap, metaCats)
 
 	// === SECTION 7 ===
 	writeSection7(&sb, collection)
@@ -243,8 +256,8 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 		return true
 	})
 	sortedPowerUp := SortByScore(powerUp)
-	sb.WriteString("| # | Pokemon | CP | IV% | Tier | Score |\n")
-	sb.WriteString("|--:|---------|---:|----:|:----:|------:|\n")
+	sb.WriteString("| # | Pokemon | CP | IV% | Raid Tier | Score |\n")
+	sb.WriteString("|--:|---------|---:|----:|:---------:|------:|\n")
 	for i, p := range TopN(sortedPowerUp, 10) {
 		sb.WriteString(fmt.Sprintf("| %d | **%s** | %d | %.1f%% | %s | %.1f |\n",
 			i+1, p.Species, p.CP, p.IVPct, tierOrDash(p), p.DevScore))
@@ -255,13 +268,55 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 	// TOP 10 Dev Score
 	sb.WriteString("### TOP 10 Dev Score\n\n")
 	sortedDev := SortByScore(c)
-	sb.WriteString("| # | Pokemon | CP | IV% | Tier | Score |\n")
-	sb.WriteString("|--:|---------|---:|----:|:----:|------:|\n")
+	sb.WriteString("| # | Pokemon | CP | IV% | Raid Tier | Score |\n")
+	sb.WriteString("|--:|---------|---:|----:|:---------:|------:|\n")
 	for i, p := range TopN(sortedDev, 10) {
 		sb.WriteString(fmt.Sprintf("| %d | **%s** | %d | %.1f%% | %s | %.1f |\n",
 			i+1, p.Species, p.CP, p.IVPct, tierOrDash(p), p.DevScore))
 	}
 	sb.WriteString("\n")
+
+	// Per-Context TOP 10
+	sb.WriteString("### TOP 10 per kontekst\n\n")
+	type ctxDef struct {
+		name     string
+		getTier  func(model.Pokemon) string
+		getRank  func(model.Pokemon) int
+		getScore func(model.Pokemon) float64
+	}
+	contexts := []ctxDef{
+		{"Raid", func(p model.Pokemon) string { return p.RaidTier }, func(p model.Pokemon) int { return p.RaidRank }, func(p model.Pokemon) float64 { return p.RaidScore }},
+		{"Master League", func(p model.Pokemon) string { return p.MLTier }, func(p model.Pokemon) int { return p.MLRank }, func(p model.Pokemon) float64 { return p.MLScore }},
+		{"Ultra League", func(p model.Pokemon) string { return p.ULTier }, func(p model.Pokemon) int { return p.ULRank }, func(p model.Pokemon) float64 { return p.ULScore }},
+		{"Great League", func(p model.Pokemon) string { return p.GLTier }, func(p model.Pokemon) int { return p.GLRank }, func(p model.Pokemon) float64 { return p.GLScore }},
+	}
+	for _, ctx := range contexts {
+		scored := filterBool(c, func(p model.Pokemon) bool { return ctx.getTier(p) != "" })
+		sort.Slice(scored, func(i, j int) bool {
+			ri, rj := ctx.getRank(scored[i]), ctx.getRank(scored[j])
+			if ri != rj {
+				return ri < rj
+			}
+			return ctx.getScore(scored[i]) > ctx.getScore(scored[j])
+		})
+		sb.WriteString(fmt.Sprintf("#### %s (Tier S/A+)\n\n", ctx.name))
+		sb.WriteString("| # | Pokemon | CP | IV% | Tier | Rank | Score |\n")
+		sb.WriteString("|--:|---------|---:|----:|:----:|-----:|------:|\n")
+		count := 0
+		for _, p := range scored {
+			tier := ctx.getTier(p)
+			if tier != "S" && tier != "A+" && tier != "A" {
+				continue
+			}
+			sb.WriteString(fmt.Sprintf("| %d | **%s** | %d | %.1f%% | %s | #%d | %.1f |\n",
+				count+1, p.Species, p.CP, p.IVPct, tier, ctx.getRank(p)+1, ctx.getScore(p)))
+			count++
+			if count >= 10 {
+				break
+			}
+		}
+		sb.WriteString("\n")
+	}
 
 	// Meta vs Collection
 	if metaData != nil && len(metaData.Rankings.Raid) > 0 {
@@ -277,41 +332,61 @@ func writeSection1(sb *strings.Builder, c []model.Pokemon, stats CollectionStats
 	sb.WriteString("\n---\n\n")
 }
 
-func writeSection2(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*model.GamemasterPokemon) {
-	sb.WriteString("## 2. Zestawy do Rajdow -- Tier List\n\n")
+func writeSection2(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*model.GamemasterPokemon, moveMap map[string]*MoveEntry) {
+	sb.WriteString("## 2. Rajdy -- Zalecane Zespoly\n\n")
 
-	tiers := BuildRaidTierList(c, gmMap)
-	for _, tier := range []string{"S", "A", "B", "C"} {
-		entries := tiers[tier]
-		if len(entries) == 0 {
+	rankings := BuildRaidRankings(c, gmMap, moveMap, 10)
+
+	for _, bossType := range BossTypes {
+		counters := rankings.ByType[bossType]
+		if len(counters) == 0 {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("### Tier %s\n\n", tier))
-		limit := safeMin(len(entries), 20)
-		for i := 0; i < limit; i++ {
-			p := entries[i].Pokemon
-			lucky := ""
-			if p.IsLucky {
-				lucky = " [Lucky]"
+		typeName := strings.Title(bossType)
+		sb.WriteString(fmt.Sprintf("### vs %s-type\n\n", typeName))
+		sb.WriteString("| # | UID | Pokemon | ATK | DPS | Optimal | MoveDPS (fast/charged) | Moves (actual) | Moves (best) | IV | CP |\n")
+		sb.WriteString("|--:|-----|---------|----:|----:|--------:|-----------------------|----------------|--------------|---:|---:|\n")
+		for i, r := range counters {
+			p := r.Pokemon
+			movesActual := fmt.Sprintf("%s / %s", strOrDash(r.FastMove), strOrDash(r.ChargedMove))
+			movesBest := fmt.Sprintf("%s / %s", strOrDash(r.BestFast), strOrDash(r.BestCharged))
+			if len(movesActual) > config.Global.Report.MaxMoveDisplay {
+				movesActual = movesActual[:config.Global.Report.MaxMoveDisplay-3] + "..."
 			}
-			sb.WriteString(fmt.Sprintf("- **%s** -- IV %.1f%%, CP %d, Moves: %s/%s/%s%s\n",
-				p.Species, p.IVPct, p.CP,
-				strOrDash(p.FastMove), strOrDash(p.Charged1), strOrDash(p.Charged2), lucky))
+			if len(movesBest) > config.Global.Report.MaxMoveDisplay {
+				movesBest = movesBest[:config.Global.Report.MaxMoveDisplay-3] + "..."
+			}
+			moveDPS := fmt.Sprintf("%.1f / %.1f", p.MoveDPSFast, p.MoveDPSCharged)
+			sb.WriteString(fmt.Sprintf("| %d | %s | **%s** | %.0f | %.1f | %.1f | %s | %s | %s | %.1f%% | %d |\n",
+				i+1, p.UID, p.Species, p.EffectiveATK, r.DPS, r.OptimalDPS,
+				moveDPS, movesActual, movesBest,
+				p.IVPct, p.CP))
 		}
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("### Priorytet inwestycji\n\n")
-	sorted := SortByScore(c)
-	count := 0
-	for _, p := range sorted {
-		if p.MetaTier == "S" || p.MetaTier == "A" {
-			sb.WriteString(fmt.Sprintf("%d. %s (Score %.1f, Tier %s)\n", count+1, p.Species, p.DevScore, p.MetaTier))
-			count++
-			if count >= 10 {
-				break
+	sb.WriteString("### Uniwersalny (wszystkie typy)\n\n")
+	if len(rankings.Universal) > 0 {
+		sb.WriteString("| # | UID | Pokemon | ATK | DPS | Optimal | MoveDPS (fast/charged) | Moves (actual) | Moves (best) | IV | CP |\n")
+		sb.WriteString("|--:|-----|---------|----:|----:|--------:|-----------------------|----------------|--------------|---:|---:|\n")
+		for i, r := range rankings.Universal {
+			p := r.Pokemon
+			movesActual := fmt.Sprintf("%s / %s", strOrDash(r.FastMove), strOrDash(r.ChargedMove))
+			movesBest := fmt.Sprintf("%s / %s", strOrDash(r.BestFast), strOrDash(r.BestCharged))
+			if len(movesActual) > config.Global.Report.MaxMoveDisplay {
+				movesActual = movesActual[:config.Global.Report.MaxMoveDisplay-3] + "..."
 			}
+			if len(movesBest) > config.Global.Report.MaxMoveDisplay {
+				movesBest = movesBest[:config.Global.Report.MaxMoveDisplay-3] + "..."
+			}
+			moveDPS := fmt.Sprintf("%.1f / %.1f", p.MoveDPSFast, p.MoveDPSCharged)
+			sb.WriteString(fmt.Sprintf("| %d | %s | **%s** | %.0f | %.1f | %.1f | %s | %s | %s | %.1f%% | %d |\n",
+				i+1, p.UID, p.Species, p.EffectiveATK, r.DPS, r.OptimalDPS,
+				moveDPS, movesActual, movesBest,
+				p.IVPct, p.CP))
 		}
+	} else {
+		sb.WriteString("Brak Pokemon z CP >= 1000.\n")
 	}
 	sb.WriteString("\n---\n\n")
 }
@@ -320,7 +395,7 @@ func writeSection3(sb *strings.Builder, c []model.Pokemon) {
 	sb.WriteString("## 3. Zestawy do PvP -- Gotowe druzyny 3v3\n\n")
 
 	for _, league := range []string{"GL", "UL", "ML"} {
-		cap := LeagueCaps[league]
+		cap := getLeagueCaps()[league]
 		leagueName := league
 		switch league {
 		case "GL":
@@ -345,13 +420,43 @@ func writeSection3(sb *strings.Builder, c []model.Pokemon) {
 				if cap > 0 && cp > cap {
 					cp = cap
 				}
-				sb.WriteString(fmt.Sprintf("- **%s:** %s -- IV %.1f%%, CP %d, Tier %s\n",
-					roles[i], member.Species, member.IVPct, cp, tierOrDash(member)))
+				tier := leagueTier(member, league)
+				sb.WriteString(fmt.Sprintf("- **%s:** %s -- IV %.1f%%, CP %d, Tier %s, Score %.1f\n",
+					roles[i], member.Species, member.IVPct, cp, strOrDash(tier), leagueScore(member, league)))
 			}
 			sb.WriteString("\n")
 		}
 	}
-	sb.WriteString("---\n\n")
+
+	// PvP Summary table
+	sb.WriteString("### Podsumowanie PvP — wszystkie ligi\n\n")
+	pvp := filterBool(c, func(p model.Pokemon) bool {
+		purpose := strings.ToLower(p.Purpose)
+		return purpose == "pvp" || purpose == "gl" || purpose == "ul" || purpose == "ml"
+	})
+	if len(pvp) > 0 {
+		sb.WriteString("| Pokemon | CP | IV% | GL Tier | UL Tier | ML Tier | DevScore |\n")
+		sb.WriteString("|---------|---:|----:|:-------:|:-------:|:-------:|---------:|\n")
+		for _, p := range TopN(SortByScore(pvp), 20) {
+			sb.WriteString(fmt.Sprintf("| **%s** | %d | %.1f%% | %s | %s | %s | %.1f |\n",
+				p.Species, p.CP, p.IVPct, strOrDash(p.GLTier), strOrDash(p.ULTier), strOrDash(p.MLTier), p.DevScore))
+		}
+	} else {
+		sb.WriteString("Brak Pokemon z Purpose=PvP.\n")
+	}
+	sb.WriteString("\n---\n\n")
+}
+
+func leagueScore(p model.Pokemon, league string) float64 {
+	switch league {
+	case "GL":
+		return p.GLScore
+	case "UL":
+		return p.ULScore
+	case "ML":
+		return p.MLScore
+	}
+	return 0
 }
 
 func writeSection4(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*model.GamemasterPokemon) {
@@ -460,13 +565,14 @@ func writeSection5(sb *strings.Builder, c []model.Pokemon, gm *GamemasterData, m
 	sb.WriteString("\n---\n\n")
 }
 
-func writeSection6(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*model.GamemasterPokemon, metaTiers map[string]string) {
+func writeSection6(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*model.GamemasterPokemon, metaCats MetaTiersByCategory) {
 	sb.WriteString("## 6. Szczegolowa analiza -- Ocena 1-10\n\n")
 
 	// Legendary / Mythical
 	sb.WriteString("### Legendary / Mythical\n\n")
 	legendary := filterBool(c, func(p model.Pokemon) bool {
-		return (p.MetaTier == "S" || p.MetaTier == "A") && (p.BaseStats.Atk+p.BaseStats.Def+p.BaseStats.HP) >= 600
+		bestTier := metaCats.BestMetaTier(p.SpeciesID)
+		return TierRank(bestTier) >= TierRank("A") && (p.BaseStats.Atk+p.BaseStats.Def+p.BaseStats.HP) >= 600
 	})
 	if len(legendary) == 0 {
 		sb.WriteString("Brak legendarnych w kolekcji.\n\n")
@@ -474,20 +580,21 @@ func writeSection6(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*mod
 		sorted := SortByScore(legendary)
 		for _, p := range sorted {
 			rating := RatingFromScore(p.DevScore)
-			sb.WriteString(formatDetailWithRating(p, rating))
+			sb.WriteString(fmt.Sprintf("- **%s** -- %s | Ocena: %d/10, IV %.1f%%, Lucky: %s, Rekomendacja: %s\n",
+				p.Species, tierContext(p), rating, p.IVPct, boolStr(p.IsLucky), Recommendation(p, rating)))
 		}
 	}
 
 	// HUNDO
-	sb.WriteString("### HUNDO\n\n")
+	sb.WriteString("\n### HUNDO\n\n")
 	hundo := filterBool(c, func(p model.Pokemon) bool { return p.IVPct == 100.0 })
 	if len(hundo) == 0 {
 		sb.WriteString("Brak HUNDO.\n\n")
 	} else {
 		sorted := SortByCP(hundo)
 		for _, p := range sorted {
-			sb.WriteString(fmt.Sprintf("- **%s** -- CP %d, Lucky: %s, Shadow: %s, Rekomendacja: MAX OUT (L50)\n",
-				p.Species, p.CP, boolStr(p.IsLucky), boolStr(p.IsShadow)))
+			sb.WriteString(fmt.Sprintf("- **%s** -- CP %d, Lucky: %s, Shadow: %s, RaidTier: %s, Rekomendacja: MAX OUT (L50)\n",
+				p.Species, p.CP, boolStr(p.IsLucky), boolStr(p.IsShadow), strOrDash(p.RaidTier)))
 		}
 	}
 	sb.WriteString("\n")
@@ -501,8 +608,8 @@ func writeSection6(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*mod
 		sorted := SortByScore(shadow)
 		for _, p := range sorted {
 			rating := RatingFromScore(p.DevScore)
-			sb.WriteString(fmt.Sprintf("- **%s** -- IV %.1f%%, Lucky: %s, Ocena: %d/10, Rekomendacja: %s\n",
-				p.Species, p.IVPct, boolStr(p.IsLucky), rating, Recommendation(p, rating)))
+			sb.WriteString(fmt.Sprintf("- **%s** -- IV %.1f%%, Lucky: %s, %s, Ocena: %d/10, Rekomendacja: %s\n",
+				p.Species, p.IVPct, boolStr(p.IsLucky), tierContext(p), rating, Recommendation(p, rating)))
 		}
 	}
 	sb.WriteString("\n")
@@ -512,7 +619,7 @@ func writeSection6(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*mod
 	pvp := filterBool(c, func(p model.Pokemon) bool {
 		purpose := strings.ToLower(p.Purpose)
 		return purpose == "pvp" || purpose == "gl" || purpose == "ul" || purpose == "ml" ||
-			p.MetaTier == "S" || p.MetaTier == "A"
+			TierRank(p.GLTier) >= TierRank("A") || TierRank(p.ULTier) >= TierRank("A") || TierRank(p.MLTier) >= TierRank("A")
 	})
 	if len(pvp) == 0 {
 		sb.WriteString("Brak PvP-relevantnych.\n\n")
@@ -520,8 +627,8 @@ func writeSection6(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*mod
 		sorted := SortByScore(pvp)
 		for _, p := range TopN(sorted, 30) {
 			rating := RatingFromScore(p.DevScore)
-			sb.WriteString(fmt.Sprintf("- **%s** -- IV %.1f%%, CP %d, Lucky: %s, Moves: %s/%s/%s, Ocena: %d/10\n",
-				p.Species, p.IVPct, p.CP, boolStr(p.IsLucky),
+			sb.WriteString(fmt.Sprintf("- **%s** -- IV %.1f%%, CP %d, Lucky: %s, %s, Moves: %s/%s/%s, Ocena: %d/10\n",
+				p.Species, p.IVPct, p.CP, boolStr(p.IsLucky), tierContext(p),
 				strOrDash(p.FastMove), strOrDash(p.Charged1), strOrDash(p.Charged2), rating))
 		}
 	}
@@ -537,11 +644,12 @@ func writeSection6(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*mod
 		for _, p := range sorted {
 			rating := RatingFromScore(p.DevScore)
 			starMeta := ""
-			if p.MetaTier == "S" || p.MetaTier == "A" {
+			bestTier := metaCats.BestMetaTier(p.SpeciesID)
+			if TierRank(bestTier) >= TierRank("A") {
 				starMeta = " [META]"
 			}
-			sb.WriteString(fmt.Sprintf("- **%s** -- IV %.1f%%, Lucky: %s%s, Ocena: %d/10, Rekomendacja: %s\n",
-				p.Species, p.IVPct, boolStr(p.IsLucky), starMeta, rating, Recommendation(p, rating)))
+			sb.WriteString(fmt.Sprintf("- **%s** -- IV %.1f%%, Lucky: %s%s, %s, Ocena: %d/10, Rekomendacja: %s\n",
+				p.Species, p.IVPct, boolStr(p.IsLucky), starMeta, tierContext(p), rating, Recommendation(p, rating)))
 		}
 	}
 	sb.WriteString("\n")
@@ -557,8 +665,8 @@ func writeSection6(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*mod
 		sorted := SortByScore(other)
 		for _, p := range sorted {
 			rating := RatingFromScore(p.DevScore)
-			sb.WriteString(fmt.Sprintf("- **%s** -- IV %.1f%%, Tags: %s, Ocena: %d/10, Rekomendacja: %s\n",
-				p.Species, p.IVPct, formatTags(p), rating, Recommendation(p, rating)))
+			sb.WriteString(fmt.Sprintf("- **%s** -- IV %.1f%%, Tags: %s, %s, Ocena: %d/10, Rekomendacja: %s\n",
+				p.Species, p.IVPct, formatTags(p), tierContext(p), rating, Recommendation(p, rating)))
 		}
 	}
 	sb.WriteString("\n---\n\n")
@@ -606,10 +714,27 @@ func strOrDash(s string) string {
 }
 
 func tierOrDash(p model.Pokemon) string {
-	if p.MetaTier == "" {
-		return "-"
+	if p.RaidTier != "" {
+		return p.RaidTier
 	}
-	return p.MetaTier
+	if p.MLTier != "" {
+		return p.MLTier
+	}
+	if p.ULTier != "" {
+		return p.ULTier
+	}
+	if p.GLTier != "" {
+		return p.GLTier
+	}
+	return "-"
+}
+
+func tierContext(p model.Pokemon) string {
+	return fmt.Sprintf("R:%s GL:%s UL:%s ML:%s", strOrDash(p.RaidTier), strOrDash(p.GLTier), strOrDash(p.ULTier), strOrDash(p.MLTier))
+}
+
+func scoreContext(p model.Pokemon) string {
+	return fmt.Sprintf("R:%.1f GL:%.1f UL:%.1f ML:%.1f", p.RaidScore, p.GLScore, p.ULScore, p.MLScore)
 }
 
 func formatTags(p model.Pokemon) string {

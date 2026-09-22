@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/adzik/pokemon/ods"
 )
@@ -252,7 +253,8 @@ func TestLoadMetaCacheExpired(t *testing.T) {
 func TestLoadMetaCacheFresh(t *testing.T) {
 	dir := t.TempDir()
 	cachePath := filepath.Join(dir, "meta_rankings.json")
-	content := `{"fetched_at":"2026-09-10T00:00:00Z","rankings":{"great_league_overall":["test"]}}`
+	now := time.Now().Format(time.RFC3339)
+	content := fmt.Sprintf(`{"fetched_at":"%s","rankings":{"great_league_overall":["test"]}}`, now)
 	if err := os.WriteFile(cachePath, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}

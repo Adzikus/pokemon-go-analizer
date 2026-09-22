@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/adzik/pokemon/config"
 	"github.com/adzik/pokemon/model"
 )
 
@@ -38,11 +39,12 @@ var BossTypes = []string{
 	"bug", "rock", "ghost", "dragon", "dark", "steel", "fairy",
 }
 
-// League caps
-var LeagueCaps = map[string]int{
-	"GL": 1500,
-	"UL": 2500,
-	"ML": 0, // unlimited
+// LeagueCaps returns league CP caps from config.
+func getLeagueCaps() map[string]int {
+	if config.Global != nil && config.Global.PVP.LeagueCaps != nil {
+		return config.Global.PVP.LeagueCaps
+	}
+	return map[string]int{"GL": 1500, "UL": 2500, "ML": 0}
 }
 
 // CollectionStats holds summary statistics.
@@ -57,7 +59,7 @@ type CollectionStats struct {
 	Hundo       int
 	HighIV      int // >=90%
 	Families    int
-	TierS       int
+	TierS       int // best-of across all contexts
 	TierA       int
 	TierB       int
 	TierC       int
@@ -100,14 +102,15 @@ func ComputeStats(c []model.Pokemon) CollectionStats {
 		if p.FamilyID != "" {
 			seenFamilies[p.FamilyID] = true
 		}
-		switch p.MetaTier {
+		bestTier := BestTier(BestTier(p.RaidTier, p.GLTier), BestTier(p.ULTier, p.MLTier))
+		switch bestTier {
 		case "S":
 			s.TierS++
-		case "A":
+		case "A+", "A":
 			s.TierA++
-		case "B":
+		case "B+", "B":
 			s.TierB++
-		case "C":
+		default:
 			s.TierC++
 		}
 		purpose := strings.ToLower(p.Purpose)
@@ -151,12 +154,12 @@ type RaidTierEntry struct {
 
 func BuildRaidTierList(c []model.Pokemon, gmMap map[string]*model.GamemasterPokemon) map[string][]RaidTierEntry {
 	tiers := map[string][]RaidTierEntry{
-		"S": {}, "A": {}, "B": {}, "C": {},
+		"S": {}, "A+": {}, "A": {}, "B+": {}, "B": {}, "C": {}, "D": {},
 	}
 	for _, p := range c {
-		tier := p.MetaTier
+		tier := p.RaidTier
 		if tier == "" {
-			tier = "C"
+			tier = "D"
 		}
 		score := float64(p.CP) * (p.IVPct / 100)
 		if p.IsLucky {
@@ -181,7 +184,7 @@ func BuildRaidByType(c []model.Pokemon, bossType string) []model.Pokemon {
 	}
 	var candidates []model.Pokemon
 	for _, p := range c {
-		if p.CP < 1000 {
+		if p.CP < config.Global.Raids.MinCP {
 			continue
 		}
 		for _, t := range effective {
@@ -209,7 +212,7 @@ type PvPTeam struct {
 }
 
 func BuildPvPTeams(c []model.Pokemon, league string) []PvPTeam {
-	cap := LeagueCaps[league]
+	cap := getLeagueCaps()[league]
 	var candidates []model.Pokemon
 	for _, p := range c {
 		if cap > 0 && p.CP > cap {
@@ -218,7 +221,8 @@ func BuildPvPTeams(c []model.Pokemon, league string) []PvPTeam {
 		if cap > 0 && p.CP < cap-200 {
 			continue
 		}
-		if p.MetaTier == "S" || p.MetaTier == "A" || p.MetaTier == "B" {
+		tier := leagueTier(p, league)
+		if TierRank(tier) >= TierRank("B") {
 			candidates = append(candidates, p)
 		}
 	}
@@ -236,6 +240,18 @@ func BuildPvPTeams(c []model.Pokemon, league string) []PvPTeam {
 		teams = append(teams, team)
 	}
 	return teams
+}
+
+func leagueTier(p model.Pokemon, league string) string {
+	switch league {
+	case "GL":
+		return p.GLTier
+	case "UL":
+		return p.ULTier
+	case "ML":
+		return p.MLTier
+	}
+	return ""
 }
 
 // --- Section 4: Transfer Candidates ---
@@ -333,7 +349,8 @@ func evaluateTransfer(p model.Pokemon, families map[string][]model.Pokemon, gmMa
 	}
 
 	// Filter 3: Meta + Quantity
-	if p.MetaTier == "S" || p.MetaTier == "A" {
+	bestTier := BestTier(BestTier(p.RaidTier, p.GLTier), BestTier(p.ULTier, p.MLTier))
+	if TierRank(bestTier) >= TierRank("A") {
 		count := 0
 		for _, fp := range family {
 			if fp.SpeciesID == p.SpeciesID {
@@ -343,7 +360,7 @@ func evaluateTransfer(p model.Pokemon, families map[string][]model.Pokemon, gmMa
 		if count >= 10 {
 			return Trade, fmt.Sprintf(" %d sztuk tego gatunku, wiec najs slabiej", count)
 		}
-		return Keep, fmt.Sprintf("Meta %s, %d szt.", p.MetaTier, count)
+		return Keep, fmt.Sprintf("Meta %s, %d szt.", bestTier, count)
 	}
 
 	// Filter 4: Purpose
@@ -455,7 +472,8 @@ func Recommendation(p model.Pokemon, rating int) string {
 	if p.IVPct == 100 {
 		return "MAX OUT (L50)"
 	}
-	if p.MetaTier == "S" && rating >= 7 {
+	bestTier := BestTier(BestTier(p.RaidTier, p.GLTier), BestTier(p.ULTier, p.MLTier))
+	if TierRank(bestTier) >= TierRank("S") && rating >= 7 {
 		return "Inwestuj — meta-relevantny"
 	}
 	if p.IsShadow && rating >= 6 {
@@ -500,7 +518,7 @@ func UniqueSpecies(c []model.Pokemon) int {
 
 // MaxCPForLeague returns the max CP a Pokemon can have for a league.
 func MaxCPForLeague(p model.Pokemon, league string) int {
-	cap := LeagueCaps[league]
+	cap := getLeagueCaps()[league]
 	if cap == 0 {
 		return p.CP // ML: unlimited
 	}

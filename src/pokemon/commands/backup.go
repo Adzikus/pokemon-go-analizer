@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/adzik/pokemon/config"
 )
 
 func RunBackup(args []string, projectRoot string) {
@@ -93,7 +95,12 @@ func cleanupOldBackups(dir, baseName string) {
 
 	sort.Sort(sort.Reverse(sort.StringSlice(backups)))
 
-	for i := 5; i < len(backups); i++ {
+	maxBackups := config.Global.Cache.MaxBackups
+	if maxBackups <= 0 {
+		maxBackups = 5
+	}
+
+	for i := maxBackups; i < len(backups); i++ {
 		os.Remove(filepath.Join(dir, backups[i]))
 	}
 }

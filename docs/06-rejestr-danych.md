@@ -50,6 +50,15 @@
 | `family_id` | string | ID rodziny ewolucyjnej |
 | `dev_score` | float64 | Score rozwoju 0-100 (IV, Lucky, Meta, Moves, Mega/Shadow, CP, Purpose) |
 | `max_cp` | int | Max CP na lvl 50 z IV 15/15/15 (`CalculateMaxCP`) |
+| `effective_atk` | float64 | Efektywny ATK: `(BaseAtk + IVAtk) * CPM_L40 * ShadowBonus` |
+| `move_dps_fast` | float64 | Surowy DPS szybkiego ruchu: `Power / Duration` |
+| `move_dps_charged` | float64 | Surowy DPS charged ruchu: `Power / TimeToCharge` |
+| `raid_dps` | float64 | DPS z bieżącymi ruchami (przeciwko Tier 5 boss, DEF=162.3) |
+| `raid_dps_optimal` | float64 | DPS z optymalnymi ruchami |
+| `raid_tier` | string | Tier raidowy (S/A+/A/B+/B/C/D) |
+| `gl_tier` | string | Tier Great League |
+| `ul_tier` | string | Tier Ultra League |
+| `ml_tier` | string | Tier Master League |
 
 ---
 

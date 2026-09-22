@@ -9,14 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-)
 
-var rankingURLs = map[string]string{
-	"great_league_overall":  "https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/rankings/all/overall/rankings-1500.json",
-	"ultra_league_overall":  "https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/rankings/all/overall/rankings-2500.json",
-	"master_league_overall": "https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/rankings/all/overall/rankings-10000.json",
-	"raid_attackers":        "https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/rankings/all/attackers/rankings-10000.json",
-}
+	"github.com/adzik/pokemon/config"
+)
 
 var fallbackRankings = map[string][]string{
 	"great_league_overall": {
@@ -43,7 +38,7 @@ func RunUpdateMeta(args []string, projectRoot string) {
 	force := fs.Bool("force", false, "Wymuszenie aktualizacji")
 	fs.Parse(args)
 
-	cachePath := filepath.Join(projectRoot, "data", "meta_rankings.json")
+	cachePath := filepath.Join(projectRoot, config.Global.Paths.Data, "meta_rankings.json")
 
 	// 1. Check cache
 	if !*force {
@@ -58,7 +53,7 @@ func RunUpdateMeta(args []string, projectRoot string) {
 	rankings := make(map[string][]string)
 	fetchFailed := false
 
-	for name, url := range rankingURLs {
+	for name, url := range config.Global.URLs.Rankings {
 		speciesIDs, err := fetchRankingJSON(url)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  BŁĄD %s: %v\n", name, err)
@@ -121,7 +116,11 @@ func loadMetaCache(path string) (cachedMetaResult, bool) {
 	}
 
 	age := int(time.Since(cached).Hours() / 24)
-	if age < 30 {
+	maxAge := 30
+	if config.Global != nil {
+		maxAge = config.Global.Cache.MaxAgeDays
+	}
+	if age < maxAge {
 		return cachedMetaResult{age: age}, true
 	}
 

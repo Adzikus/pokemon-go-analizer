@@ -923,20 +923,22 @@ Pokemon oznaczony jako "PvP" (np. UL, max CP 3800) może być **świetnym raid a
 1. Dla każdego typu bossa (Dark, Psychic, Fire...):
    - Określ typy super-effective
      (np. Dark boss → Fighting, Bug, Fairy)
-   - Znajdź Pokemon z tymi typami (niezależnie od purpose)
-   - Sortuj: purpose "Rajdy" > "PvP" (preferencja, nie wykluczenie)
-             → CP DESC → IV% DESC → dev_score DESC
-   - TOP N per typ bossa
+   - Dla każdego Pokemon z kolekcji (CP >= 1000):
+     - Oblicz ATK/DEF ratio: (BaseAtk + IVAtk) * CPM_L40 * ShadowBonus / BossDEF
+     - Oblicz DPS z bieżącymi ruchami (STAB + Effectiveness)
+     - Znajdź optymalne ruchy (maksymalny DPS)
+   - Sortuj: DPS DESC → TOP N per typ bossa
 
-2. Uniwersalny multipurpose squad:
-   - Pokemon z najwyższym CP + multi-type coverage
-   - Preferencja: purpose "Rajdy" > "PvP"
-   - Niezależnie od purpose tag
+2. Uniwersalny ranking:
+   - Wszystkie Pokemon z CP >= 1000
+   - Effectiveness = 1.0 (neutralne)
+   - Sortuj: DPS DESC → TOP 10
 
-3. Tier listy meta (S/A/B/C):
-   - Filtr: meta_tier S/A/B
-   - Sort: dev_score DESC
-   - Max 20 per tier
+3. Kolumny w raporcie:
+   - ATK: efektywny statystyk ataku Pokemon
+   - DPS: obrażenia na sekundę (z ruchami bieżącymi)
+   - Optimal: DPS z optymalnymi ruchami
+   - MoveDPS: surowy DPS ruchów (bez statystyk Pokemon)
 ```
 
 ##### Typy bossów → Super-effective
@@ -967,11 +969,14 @@ Pokemon oznaczony jako "PvP" (np. UL, max CP 3800) może być **świetnym raid a
 
 | Wejście | Wyjście |
 |---------|---------|
-| `Pokemon[]` (z Kroku 2) | `raid_by_type: Map<TypBossa, Pokemon[]>` — TOP N per typ |
-| | `multipurpose_squad: Pokemon[]` — TOP 10 uniwersalnych |
-| | `tier_s: Pokemon[]` — meta S tier (max 20) |
-| | `tier_a: Pokemon[]` — meta A tier (max 20) |
-| | `tier_b: Pokemon[]` — meta B tier (max 20) |
+| `Pokemon[]` (z Kroku 2) | `raid_by_type: Map<TypBossa, RaidResult[]>` — TOP N per typ |
+| `GamemasterData` | Each RaidResult contains: |
+| | - `Pokemon` — dane Pokemon |
+| | - `DPS` — obrażenia na sekundę (z ATK/DEF ratio) |
+| | - `OptimalDPS` — DPS z optymalnymi ruchami |
+| | - `MoveDPSFast` — surowy DPS szybkiego ruchu |
+| | - `MoveDPSCharged` — surowy DPS charged ruchu |
+| | `universal: RaidResult[]` — TOP 10 uniwersalnych |
 
 ##### Diagram — Sekcja 2
 
@@ -988,23 +993,19 @@ partition "Raid Counters per Typ Bossa" {
     :Dla kazdego typu bossa
     (Dark, Psychic, Fire...);
     :Określ typy super-effective;
-    :Filtruj Pokemon po typach
-    (niezaleznie od purpose);
-    :Sortuj: CP DESC, IV% DESC;
+    :Dla każdego Pokemon (CP >= 1000):
+    - Oblicz ATK/DEF ratio
+    - Oblicz DPS (STAB + Effectiveness)
+    - Znajdź optymalne ruchy;
+    :Sortuj: DPS DESC;
     :TOP N per typ;
 }
 
-partition "Multipurpose Squad" {
-    :Filtruj: najwyzszy CP
-    + multi-type coverage;
-    :Sortuj: dev_score DESC;
+partition "Universal Ranking" {
+    :Wszystkie Pokemon (CP >= 1000);
+    :Effectiveness = 1.0 (neutral);
+    :Sortuj: DPS DESC;
     :TOP 10 uniwersalnych;
-}
-
-partition "Tier Listy Meta" {
-    :Filtruj: meta_tier S/A/B;
-    :Sortuj: dev_score DESC;
-    :TOP 20 per tier;
 }
 
 :Sekcja 2 Output;

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/adzik/pokemon/commands"
+	"github.com/adzik/pokemon/config"
 	"github.com/rs/zerolog"
 )
 
@@ -23,6 +24,9 @@ func main() {
 	binDir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	projectRoot := filepath.Join(binDir, "..")
 
+	// Load config
+	config.Load(projectRoot)
+
 	switch cmd {
 	case "verify":
 		commands.RunVerify(args, projectRoot)
@@ -34,6 +38,8 @@ func main() {
 		commands.RunAnalyze(args, projectRoot)
 	case "generate":
 		commands.RunGenerate(args, projectRoot)
+	case "update-gamemaster":
+		commands.RunUpdateGamemaster(args, projectRoot)
 	case "update-meta":
 		commands.RunUpdateMeta(args, projectRoot)
 	case "update":
@@ -54,14 +60,15 @@ Uzycie:
   pokemon <polecenie> [flagi]
 
 Polecenia:
-  verify      Weryfikuje strukture pliku ODS
-  backup      Tworzy backup ODS z weryfikacja
-  restore     Przywraca ODS z wybranego backupu
-  analyze     Generuje raport analizy (JSON + Markdown)
-  generate    Generuje nowy ODS z gamemastera
-  update-meta Aktualizuje meta rankingi z PvPoke
-  update      Regeneruje arkusze pochodne ODS
-  help        Wyswietla te pomoc
+  verify            Weryfikuje strukture pliku ODS
+  backup            Tworzy backup ODS z weryfikacja
+  restore           Przywraca ODS z wybranego backupu
+  analyze           Generuje raport analizy (JSON + Markdown)
+  generate          Generuje nowy ODS z gamemastera
+  update-gamemaster Pobiera swiezy gamemaster.json z PvPoke
+  update-meta       Aktualizuje meta rankingi z PvPoke
+  update            Regeneruje arkusze pochodne ODS
+  help              Wyswietla te pomoc
 
 Przyklady:
   pokemon verify --konto Test
@@ -69,5 +76,6 @@ Przyklady:
   pokemon analyze --konto Test
   pokemon generate --konto Test
   pokemon restore --konto Test -- Pokemon-GO-Test.ods.bak.20260910_102018
+  pokemon update-gamemaster --force
   pokemon update-meta --force`)
 }
