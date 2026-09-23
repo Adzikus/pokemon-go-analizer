@@ -111,7 +111,7 @@ func CalculateMoveDPS(
 	bossType string,
 	isShadow bool,
 ) float64 {
-	atk := float64(baseAtk+ivAtk) * CPM_L40
+	atk := float64(baseAtk+ivAtk) * GetCPM(40)
 	if isShadow {
 		atk *= config.Global.Raids.ShadowATKBonus
 	}
@@ -197,7 +197,7 @@ func CalculatePokemonDPS(p model.Pokemon, gmMap map[string]*model.GamemasterPoke
 }
 
 func CalculateEffectiveATK(p model.Pokemon) float64 {
-	atk := float64(p.BaseStats.Atk+p.IVAtk) * CPM_L40
+	atk := float64(p.BaseStats.Atk+p.IVAtk) * GetCPM(40)
 	if p.IsShadow {
 		atk *= config.Global.Raids.ShadowATKBonus
 	}
@@ -267,12 +267,17 @@ func FindBestCounters(
 
 		bestFast, bestCharged, optimalDPS := FindOptimalMoves(p, gmMap, moveMap, bossType)
 
-		pokemonTypes := []string{strings.ToLower(p.Type1), strings.ToLower(p.Type2)}
 		superEff := false
 		if bossType != "" {
-			superEff = IsSuperEffective(fast, bossType) || IsSuperEffective(charged, bossType)
+			fastEntry := moveMap[normalizeMoveID(fast)]
+			chargedEntry := moveMap[normalizeMoveID(charged)]
+			if fastEntry != nil {
+				superEff = IsSuperEffective(fastEntry.Type, bossType)
+			}
+			if !superEff && chargedEntry != nil {
+				superEff = IsSuperEffective(chargedEntry.Type, bossType)
+			}
 		}
-		_ = IsSTAB(fast, pokemonTypes)
 
 		results = append(results, RaidDPSResult{
 			Pokemon:     p,

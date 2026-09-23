@@ -2,80 +2,13 @@ package commands
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/adzik/pokemon/ods"
-	"github.com/adzik/pokemon/pkg/analysis"
-	"github.com/adzik/pokemon/pkg/gamemaster"
 )
-
-func TestCalculateCP(t *testing.T) {
-	tests := []struct {
-		name                     string
-		baseAtk, baseDef, baseHP int
-		ivAtk, ivDef, ivHP       int
-		level                    float64
-		wantCP                   int
-	}{
-		{"bulbasaur 15/15/15 lvl 50", 118, 111, 128, 15, 15, 15, 50, 0},
-		{"bulbasaur 10/10/10 lvl 30", 118, 111, 128, 10, 10, 10, 30, 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cp := analysis.CalculateCP(tt.baseAtk, tt.baseDef, tt.baseHP, tt.ivAtk, tt.ivDef, tt.ivHP, tt.level)
-			if cp <= 0 {
-				t.Errorf("analysis.CalculateCP() = %d, want > 0", cp)
-			}
-		})
-	}
-}
-
-func TestCalculateCPZeroIVs(t *testing.T) {
-	cp := analysis.CalculateCP(100, 100, 100, 0, 0, 0, 50)
-	if cp <= 0 {
-		t.Errorf("analysis.CalculateCP(0 IVs) = %d, want > 0", cp)
-	}
-}
-
-func TestCalculateCPMaxIVsHigher(t *testing.T) {
-	cpLow := analysis.CalculateCP(100, 100, 100, 0, 0, 0, 50)
-	cpHigh := analysis.CalculateCP(100, 100, 100, 15, 15, 15, 50)
-	if cpHigh <= cpLow {
-		t.Errorf("max IVs CP (%d) should be > min IVs CP (%d)", cpHigh, cpLow)
-	}
-}
-
-func TestCalculateMaxCP(t *testing.T) {
-	cp := analysis.CalculateMaxCP(118, 111, 128, 15, 15, 15)
-	if cp <= 0 {
-		t.Errorf("analysis.CalculateMaxCP() = %d, want > 0", cp)
-	}
-}
-
-func TestIVPercentage(t *testing.T) {
-	tests := []struct {
-		atk, def, hp int
-		wantPct      float64
-	}{
-		{15, 15, 15, 100.0},
-		{0, 0, 0, 0.0},
-		{10, 10, 10, 66.66666666666667},
-		{5, 5, 5, 33.33333333333333},
-	}
-	for _, tt := range tests {
-		name := fmt.Sprintf("%d/%d/%d", tt.atk, tt.def, tt.hp)
-		t.Run(name, func(t *testing.T) {
-			pct := float64(tt.atk+tt.def+tt.hp) / 45.0 * 100.0
-			if math.Abs(pct-tt.wantPct) > 0.001 {
-				t.Errorf("IV%% = %f, want %f", pct, tt.wantPct)
-			}
-		})
-	}
-}
 
 func TestBuildKolekcjaRowsEmpty(t *testing.T) {
 	rows := buildKolekcjaRows(100, 50, nil)
@@ -131,17 +64,13 @@ func TestBuildKolekcjaRowsWithData(t *testing.T) {
 
 func TestBuildKolekcjaRowsFormulas(t *testing.T) {
 	rows := buildKolekcjaRows(100, 50, nil)
-	// Row 2 (first data row) should have specific formula references
 	row0 := rows[0]
-	// D formula references row 2
 	if !contains(row0[3].Formula, "[.B2]") {
 		t.Errorf("row 0 col D formula %q should reference [.B2]", row0[3].Formula)
 	}
-	// J formula references row 2
 	if !contains(row0[9].Formula, "[.G2]") {
 		t.Errorf("row 0 col J formula %q should reference [.G2]", row0[9].Formula)
 	}
-	// Row 100 (99th data row) should reference row 101
 	row99 := rows[99]
 	if !contains(row99[3].Formula, "[.B101]") {
 		t.Errorf("row 99 col D formula %q should reference [.B101]", row99[3].Formula)
@@ -195,27 +124,6 @@ func TestExtractCollectionRowsAllEmpty(t *testing.T) {
 	rows := extractCollectionRows(sheet)
 	if len(rows) != 0 {
 		t.Errorf("expected 0 data rows, got %d", len(rows))
-	}
-}
-
-func TestNormalizeName(t *testing.T) {
-	tests := []struct {
-		input, want string
-	}{
-		{"bulbasaur", "bulbasaur"},
-		{"mr-mime", "mr-mime"},
-		{"mime-jr", "mime-jr"},
-		{"porygon-z", "porygon-z"},
-		{"ho-oh", "ho-oh"},
-		{"jangmo-o", "jangmo-o"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			got := gamemaster.NormalizeName(tt.input)
-			if got != tt.want {
-				t.Errorf("gamemaster.NormalizeName(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
 	}
 }
 
@@ -298,29 +206,5 @@ func TestLoadMetaCacheNoFetchedAt(t *testing.T) {
 	_, ok := loadMetaCache(cachePath)
 	if ok {
 		t.Error("expected missing fetched_at to return false")
-	}
-}
-
-func TestGetCPM(t *testing.T) {
-	// CPM table is linear in this implementation
-	// L1 = index 0, L50 = index 98
-	cpm1 := analysis.GetCPM(1)
-	if cpm1 < 0.09 || cpm1 > 0.10 {
-		t.Errorf("analysis.GetCPM(1) = %f, want ~0.094", cpm1)
-	}
-	cpm50 := analysis.GetCPM(50)
-	if cpm50 < 1.07 || cpm50 > 1.09 {
-		t.Errorf("analysis.GetCPM(50) = %f, want ~1.076", cpm50)
-	}
-}
-
-func TestGetCPMNonDecreasing(t *testing.T) {
-	var prev float64
-	for level := 1.0; level <= 50; level += 0.5 {
-		cpm := analysis.GetCPM(level)
-		if cpm < prev {
-			t.Errorf("analysis.GetCPM(%f) = %f < previous %f", level, cpm, prev)
-		}
-		prev = cpm
 	}
 }

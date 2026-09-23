@@ -528,39 +528,26 @@ func writeSection4(sb *strings.Builder, c []model.Pokemon, gmMap map[string]*mod
 }
 
 func writeSection5(sb *strings.Builder, c []model.Pokemon, gm *gamemaster.GamemasterData, metaData *gamemaster.MetaData) {
-	sb.WriteString("## 5. Poszukiwani do statusu Lucky -- Priorytety Lucky analysis.Trades\n\n")
+	sb.WriteString("## 5. Poszukiwani do statusu Lucky -- Priorytety Lucky Trades\n\n")
 
 	targets := analysis.BuildLuckyTargets(c, gm, metaData)
 
-	sb.WriteString("### Priorytet 1: Legendary / Mythical (Meta S-tier)\n\n")
-	for _, t := range targets {
-		if t.Priority != 1 {
-			continue
+	if len(targets) == 0 {
+		sb.WriteString("Brak kandydatow -- wszystkie gatunki maja juz status Lucky.\n\n")
+	} else {
+		for _, t := range targets {
+			status := "BRAK Lucky"
+			if t.HasLucky {
+				status = "MASZ Lucky"
+			}
+			sb.WriteString(fmt.Sprintf("- **%s** (score %.0f) -- %s\n", t.Reason, t.Score, status))
 		}
-		status := "NO BRAK Lucky"
-		if t.HasLucky {
-			status = "YES MASZ Lucky"
-		}
-		sb.WriteString(fmt.Sprintf("- **%s** -- %s\n", t.Reason, status))
 	}
 	sb.WriteString("\n")
 
-	sb.WriteString("### Priorytet 2: Shadow-eligible Meta\n\n")
-	for _, t := range targets {
-		if t.Priority != 2 {
-			continue
-		}
-		status := "NO BRAK Lucky"
-		if t.HasLucky {
-			status = "YES MASZ Lucky"
-		}
-		sb.WriteString(fmt.Sprintf("- **%s** -- %s\n", t.Reason, status))
-	}
-	sb.WriteString("\n")
-
-	sb.WriteString("### Strategia Lucky analysis.Trade\n\n")
+	sb.WriteString("### Strategia Lucky Trade\n\n")
 	sb.WriteString("1. Handel to jedyny sposob na uzyskanie Lucky -- im wiecej handlujesz, tym wyzszy rate\n")
-	sb.WriteString("2. Gwarantowany Lucky analysis.Trade (Lucky Friend) przeznaczaj na legendy, ktorych nie masz\n")
+	sb.WriteString("2. Gwarantowany Lucky Trade (Lucky Friend) przeznaczaj na legendy, ktorych nie masz\n")
 	sb.WriteString("3. Nie handluj HUNDO -- juz sa idealne\n")
 	sb.WriteString("4. Im starszy Pokemon (wiek w kolekcji), tym wyzsza szansa na Lucky\n")
 	sb.WriteString("5. Candy XL z handlu zalezy od odleglosci łapania (100km+ = 100% szansa XL)\n")

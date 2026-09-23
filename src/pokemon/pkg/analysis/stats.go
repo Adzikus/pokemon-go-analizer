@@ -89,9 +89,13 @@ func ComputeStats(c []model.Pokemon) CollectionStats {
 
 func TopN(c []model.Pokemon, n int) []model.Pokemon {
 	if len(c) <= n {
-		return c
+		out := make([]model.Pokemon, len(c))
+		copy(out, c)
+		return out
 	}
-	return c[:n]
+	out := make([]model.Pokemon, n)
+	copy(out, c[:n])
+	return out
 }
 
 func SortByCP(c []model.Pokemon) []model.Pokemon {

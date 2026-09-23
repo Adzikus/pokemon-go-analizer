@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/adzik/pokemon/config"
 	"github.com/adzik/pokemon/model"
+	"github.com/adzik/pokemon/pkg/gamemaster"
 )
 
 type MetaCompareRow struct {
@@ -27,16 +29,13 @@ func BuildMetaComparison(c []model.Pokemon, raidAttackers []string, gmMap map[st
 
 	var rows []MetaCompareRow
 	limit := len(raidAttackers)
-	if limit > 20 {
-		limit = 20
+	if limit > config.Global.Meta.TopN {
+		limit = config.Global.Meta.TopN
 	}
 
 	for i := 0; i < limit; i++ {
 		sid := raidAttackers[i]
-		tier := "A"
-		if i < 10 {
-			tier = "S"
-		}
+		tier := gamemaster.RankToTier(i)
 
 		name := sid
 		if gm := gmMap[sid]; gm != nil {
@@ -58,7 +57,6 @@ func BuildMetaComparison(c []model.Pokemon, raidAttackers []string, gmMap map[st
 				row.BestCP = p.CP
 				row.IsLucky = p.IsLucky
 				row.Score = p.DevScore
-				row.Name = p.Species
 			}
 		}
 

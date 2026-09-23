@@ -16,6 +16,11 @@ type Config struct {
 	Scoring   ScoringConfig   `json:"scoring"`
 	Report    ReportConfig    `json:"report"`
 	PVP       PVPConfig       `json:"pvp"`
+	Meta      MetaConfig      `json:"meta"`
+}
+
+type MetaConfig struct {
+	TopN int `json:"top_n"`
 }
 
 type URLsConfig struct {
@@ -64,6 +69,7 @@ type ScoringConfig struct {
 	CPMaxPts float64 `json:"cp_max_pts"`
 	ScoreMax float64 `json:"score_max"`
 	IVWeight float64 `json:"iv_weight"`
+	MegaPts  float64 `json:"mega_pts"`
 }
 
 type ReportConfig struct {
@@ -128,6 +134,7 @@ func Default() *Config {
 			CPMaxPts: 10,
 			ScoreMax: 100,
 			IVWeight: 100,
+			MegaPts:  5,
 		},
 		Report: ReportConfig{
 			ModelName:       "opencode",
@@ -142,6 +149,9 @@ func Default() *Config {
 				"UL": 2500,
 				"ML": 0,
 			},
+		},
+		Meta: MetaConfig{
+			TopN: 20,
 		},
 	}
 }

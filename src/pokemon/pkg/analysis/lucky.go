@@ -1,86 +1,113 @@
 package analysis
 
 import (
-	"fmt"
+	"slices"
+	"sort"
 
 	"github.com/adzik/pokemon/model"
 	"github.com/adzik/pokemon/pkg/gamemaster"
 )
 
 type LuckyTarget struct {
-	Pokemon  model.Pokemon
-	Priority int
-	HasLucky bool
-	Reason   string
+	SpeciesID string
+	Species   string
+	Score     float64
+	IsLegend  bool
+	HasLucky  bool
+	Reason    string
 }
 
 func BuildLuckyTargets(c []model.Pokemon, gmData *gamemaster.GamemasterData, metaData *gamemaster.MetaData) []LuckyTarget {
-	luckySpecies := map[string]bool{}
+	// Step 1: build map of owned lucky species
+	ownedLucky := map[string]bool{}
 	for _, p := range c {
 		if p.IsLucky {
-			luckySpecies[p.SpeciesID] = true
+			ownedLucky[p.SpeciesID] = true
 		}
 	}
 
-	metaS := map[string]bool{}
-	metaA := map[string]bool{}
+	// Step 2: build meta tier maps from Raid rankings
+	// Rank 0-9 → S (20pts), 10-19 → A (14pts)
+	metaScore := map[string]float64{}
 	for i, sid := range metaData.Rankings.Raid {
-		if i < 10 {
-			metaS[sid] = true
-		} else if i < 20 {
-			metaA[sid] = true
+		switch {
+		case i < 10:
+			metaScore[sid] = 20
+		case i < 20:
+			metaScore[sid] = 14
 		}
 	}
 
+	// Step 3: collect candidates from gamemaster
 	var targets []LuckyTarget
-
 	for _, gm := range gmData.Pokemon {
-		isLegend := false
-		for _, tag := range gm.Tags {
-			if tag == "legendary" || tag == "mythical" {
-				isLegend = true
-				break
-			}
-		}
-		if !isLegend {
+		tags := gm.Tags
+
+		// Exclude shadow variants
+		if hasTag(tags, "shadow") {
 			continue
 		}
-		if !metaS[gm.SpeciesID] {
+		// Exclude untradeable
+		if hasTag(tags, "untradeable") {
 			continue
 		}
-		reason := fmt.Sprintf("%s -- Meta S raid", gm.SpeciesName)
+
+		isLegend := hasTag(tags, "legendary") || hasTag(tags, "mythical")
+
+		// Skip if already owned as Lucky
+		if ownedLucky[gm.SpeciesID] {
+			continue
+		}
+
+		// Calculate score
+		base := metaScore[gm.SpeciesID] // 0 if unranked
+		bonus := 0.0
+		if isLegend {
+			bonus = 5
+		}
+		score := base + bonus
+
+		reason := buildReason(gm.SpeciesName, isLegend, base)
+
 		targets = append(targets, LuckyTarget{
-			Priority: 1,
-			HasLucky: luckySpecies[gm.SpeciesID],
-			Reason:   reason,
+			SpeciesID: gm.SpeciesID,
+			Species:   gm.SpeciesName,
+			Score:     score,
+			IsLegend:  isLegend,
+			HasLucky:  false,
+			Reason:    reason,
 		})
 	}
 
-	for _, gm := range gmData.Pokemon {
-		isShadowElig := false
-		for _, tag := range gm.Tags {
-			if tag == "shadoweligible" {
-				isShadowElig = true
-				break
-			}
-		}
-		if !isShadowElig {
-			continue
-		}
-		if !metaS[gm.SpeciesID] && !metaA[gm.SpeciesID] {
-			continue
-		}
-		tier := "A"
-		if metaS[gm.SpeciesID] {
-			tier = "S"
-		}
-		reason := fmt.Sprintf("%s — Shadow-eligible, Meta %s", gm.SpeciesName, tier)
-		targets = append(targets, LuckyTarget{
-			Priority: 2,
-			HasLucky: luckySpecies[gm.SpeciesID],
-			Reason:   reason,
-		})
-	}
+	// Step 4: sort by score descending
+	sort.Slice(targets, func(i, j int) bool {
+		return targets[i].Score > targets[j].Score
+	})
 
 	return targets
+}
+
+func hasTag(tags []string, tag string) bool {
+	return slices.Contains(tags, tag)
+}
+
+func buildReason(species string, isLegend bool, metaPts float64) string {
+	if isLegend {
+		switch metaPts {
+		case 20:
+			return species + " — Legendary, Meta S"
+		case 14:
+			return species + " — Legendary, Meta A"
+		default:
+			return species + " — Legendary"
+		}
+	}
+	switch metaPts {
+	case 20:
+		return species + " — Meta S"
+	case 14:
+		return species + " — Meta A"
+	default:
+		return species
+	}
 }

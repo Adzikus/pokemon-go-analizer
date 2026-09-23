@@ -3,10 +3,8 @@ package analysis
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/adzik/pokemon/model"
-	"github.com/adzik/pokemon/pkg/gamemaster"
 )
 
 type TransferStatus string
@@ -57,63 +55,97 @@ func evaluateTransfer(p model.Pokemon, families map[string][]model.Pokemon, gmMa
 	}
 	family := families[fid]
 
-	if p.IsShiny {
-		betterShiny := false
-		for _, fp := range family {
-			if fp.IsShiny && fp.IVPct > p.IVPct {
-				betterShiny = true
-				break
-			}
-		}
-		if betterShiny {
-			if p.IsTraded {
-				return Trade, "Lepszy shiny w rodzinie, juz tradeowany"
-			}
-			return Trade, "Lepszy shiny w rodzinie"
-		}
-		return Keep, "Jedyny shiny w rodzinie"
+	// 1. Shiny HUNDO → always KEEP
+	if p.IsShiny && p.IVPct == 100 {
+		return Keep, "Shiny HUNDO"
 	}
 
-	if len(family) == 1 {
-		return Keep, "Jedyny w rodzinie"
-	}
+	// 2. HUNDO (not shiny) → KEEP, unless family has Shiny HUNDO → SOFT_KEEP
 	if p.IVPct == 100 {
+		for _, fp := range family {
+			if fp.IsShiny && fp.IVPct == 100 && fp.UID != p.UID {
+				return SoftKeep, "HUNDO, ale w rodzinie jest Shiny HUNDO"
+			}
+		}
 		return Keep, "HUNDO"
 	}
 
+	// 3. Lucky → KEEP if alone, SOFT_KEEP if better Lucky exists in family
+	if p.IsLucky {
+		for _, fp := range family {
+			if fp.IsLucky && fp.IVPct > p.IVPct && fp.UID != p.UID {
+				return SoftKeep, "Lepszy Lucky w rodzinie"
+			}
+		}
+		return Keep, "Jedyny/najlepszy Lucky w rodzinie"
+	}
+
+	// 4. Shiny (not HUNDO)
+	if p.IsShiny {
+		// Find best shiny in family
+		bestShinyIV := p.IVPct
+		for _, fp := range family {
+			if fp.IsShiny && fp.IVPct > bestShinyIV {
+				bestShinyIV = fp.IVPct
+			}
+		}
+		hasBetterShiny := bestShinyIV > p.IVPct
+
+		if !hasBetterShiny {
+			return Keep, "Jedyny/najlepszy shiny w rodzinie"
+		}
+		if p.IVPct < 88 {
+			return Trade, "Lepszy shiny w rodzinie, niskie IV"
+		}
+		return SoftKeep, "Lepszy shiny w rodzinie, ale IV >= 88%%"
+	}
+
+	// 5. High IV (>= 88%) → SOFT_KEEP
+	if p.IVPct >= 88 {
+		return SoftKeep, fmt.Sprintf("Wysokie IV %.1f%%", p.IVPct)
+	}
+
+	// 6. Purpose = "kolekcja" → SOFT_KEEP
+	if p.Purpose == "kolekcja" {
+		return SoftKeep, "Element oznaczony do kolekcji"
+	}
+
+	// 7. Shadow → SOFT_KEEP (can't trade, like Lucky)
+	if p.IsShadow {
+		return SoftKeep, "Shadow — nie moze byc trade"
+	}
+
+	// 8. Excess duplicates (>10 of same species) → TRADE
+	speciesCount := 0
+	for _, fp := range family {
+		if fp.SpeciesID == p.SpeciesID {
+			speciesCount++
+		}
+	}
+	if speciesCount > 10 {
+		return Trade, fmt.Sprintf("Nadmiar: %d szt. tego gatunku", speciesCount)
+	}
+
+	// 9. Find best in family (by IV, then CP)
 	best := p
 	for _, fp := range family {
 		if fp.IVPct > best.IVPct || (fp.IVPct == best.IVPct && fp.CP > best.CP) {
 			best = fp
 		}
 	}
+
+	// 10. CP diff > 50% vs best → TRADE
 	if best.UID != p.UID {
 		cpDiff := float64(best.CP-p.CP) / float64(best.CP) * 100
 		if cpDiff > 50 {
-			return Trade, fmt.Sprintf("CP difference %.0f%% vs best in family", cpDiff)
+			return Trade, fmt.Sprintf("Roznica CP %.0f%% vs najlepszy w rodzinie", cpDiff)
 		}
+		// 11. Lower IV than best → TRADE
 		if best.IVPct > p.IVPct {
 			return Trade, "Nizsze IV niz najlepszy w rodzinie"
 		}
 	}
 
-	bestTier := gamemaster.BestTier(gamemaster.BestTier(p.RaidTier, p.GLTier), gamemaster.BestTier(p.ULTier, p.MLTier))
-	if gamemaster.TierRank(bestTier) >= gamemaster.TierRank("A") {
-		count := 0
-		for _, fp := range family {
-			if fp.SpeciesID == p.SpeciesID {
-				count++
-			}
-		}
-		if count >= 10 {
-			return Trade, fmt.Sprintf(" %d sztuk tego gatunku, wiec najs slabiej", count)
-		}
-		return Keep, fmt.Sprintf("Meta %s, %d szt.", bestTier, count)
-	}
-
-	if strings.ToLower(p.Purpose) == "kolekcja" {
-		return SoftKeep, "Element oznaczony do kolekcji - usuwac w ostatecznosci"
-	}
-
+	// 12. SAFE
 	return Safe, "Brak wartosci bojowej/kolekcjonerskiej"
 }
