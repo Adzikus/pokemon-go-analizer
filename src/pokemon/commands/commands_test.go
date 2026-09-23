@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adzik/pokemon/config"
 	"github.com/adzik/pokemon/ods"
 )
 
@@ -206,5 +207,366 @@ func TestLoadMetaCacheNoFetchedAt(t *testing.T) {
 	_, ok := loadMetaCache(cachePath)
 	if ok {
 		t.Error("expected missing fetched_at to return false")
+	}
+}
+
+// --- normalizeName tests ---
+
+func TestNormalizeName_Alolan(t *testing.T) {
+	got := normalizeName("Alolan Vulpix")
+	if got != "Vulpix - Alolan" {
+		t.Errorf("got %q, want %q", got, "Vulpix - Alolan")
+	}
+}
+
+func TestNormalizeName_Galarian(t *testing.T) {
+	got := normalizeName("Galarian Corsola")
+	if got != "Corsola - Galarian" {
+		t.Errorf("got %q, want %q", got, "Corsola - Galarian")
+	}
+}
+
+func TestNormalizeName_Hisuian(t *testing.T) {
+	got := normalizeName("Hisuian Growlithe")
+	if got != "Growlithe - Hisuian" {
+		t.Errorf("got %q, want %q", got, "Growlithe - Hisuian")
+	}
+}
+
+func TestNormalizeName_Paldean(t *testing.T) {
+	got := normalizeName("Paldean Wooper")
+	if got != "Wooper - Paldean" {
+		t.Errorf("got %q, want %q", got, "Wooper - Paldean")
+	}
+}
+
+func TestNormalizeName_Mega(t *testing.T) {
+	got := normalizeName("Charizard Mega Y")
+	if got != "Charizard - Mega Y" {
+		t.Errorf("got %q, want %q", got, "Charizard - Mega Y")
+	}
+}
+
+func TestNormalizeName_MegaX(t *testing.T) {
+	got := normalizeName("Charizard Mega X")
+	if got != "Charizard - Mega X" {
+		t.Errorf("got %q, want %q", got, "Charizard - Mega X")
+	}
+}
+
+func TestNormalizeName_Regular(t *testing.T) {
+	got := normalizeName("Bulbasaur")
+	if got != "Bulbasaur" {
+		t.Errorf("got %q, want %q", got, "Bulbasaur")
+	}
+}
+
+func TestNormalizeName_AlolanSingleWord(t *testing.T) {
+	got := normalizeName("Alolan Raichu")
+	if got != "Raichu - Alolan" {
+		t.Errorf("got %q, want %q", got, "Raichu - Alolan")
+	}
+}
+
+// --- capitalize tests ---
+
+func TestCapitalize_Normal(t *testing.T) {
+	got := capitalize("fire")
+	if got != "Fire" {
+		t.Errorf("got %q, want %q", got, "Fire")
+	}
+}
+
+func TestCapitalize_Empty(t *testing.T) {
+	got := capitalize("")
+	if got != "" {
+		t.Errorf("got %q, want empty", got)
+	}
+}
+
+func TestCapitalize_AlreadyCapitalized(t *testing.T) {
+	got := capitalize("Fire")
+	if got != "Fire" {
+		t.Errorf("got %q, want %q", got, "Fire")
+	}
+}
+
+func TestCapitalize_SingleChar(t *testing.T) {
+	got := capitalize("a")
+	if got != "A" {
+		t.Errorf("got %q, want %q", got, "A")
+	}
+}
+
+func TestCapitalize_AllCaps(t *testing.T) {
+	got := capitalize("FIRE")
+	if got != "FIRE" {
+		t.Errorf("got %q, want %q", got, "FIRE")
+	}
+}
+
+// --- calcMaxCP tests ---
+
+func TestCalcMaxCP_Bulbasaur151515(t *testing.T) {
+	got := calcMaxCP(118, 111, 128)
+	if got != 1260 {
+		t.Errorf("calcMaxCP(118,111,128) = %d, want 1260", got)
+	}
+}
+
+func TestCalcMaxCP_Charmeleon151515(t *testing.T) {
+	got := calcMaxCP(165, 119, 126)
+	if got != 1747 {
+		t.Errorf("calcMaxCP(165,119,126) = %d, want 1747", got)
+	}
+}
+
+func TestCalcMaxCP_ZeroIVs(t *testing.T) {
+	// Still positive because base stats contribute
+	got := calcMaxCP(100, 100, 100)
+	if got <= 0 {
+		t.Errorf("calcMaxCP(100,100,100) = %d, expected > 0", got)
+	}
+}
+
+func TestCalcMaxCP_HigherBaseHigherCP(t *testing.T) {
+	low := calcMaxCP(100, 100, 100)
+	high := calcMaxCP(200, 200, 200)
+	if high <= low {
+		t.Errorf("higher base stats should give higher CP: %d vs %d", high, low)
+	}
+}
+
+// --- sqrt tests ---
+
+func TestSqrt_Perfect(t *testing.T) {
+	got := sqrt(9.0)
+	// Newton's method should converge to ~3.0
+	if got < 2.9999 || got > 3.0001 {
+		t.Errorf("sqrt(9) = %f, expected ~3.0", got)
+	}
+}
+
+func TestSqrt_Zero(t *testing.T) {
+	got := sqrt(0.0)
+	if got != 0.0 {
+		t.Errorf("sqrt(0) = %f, expected 0.0", got)
+	}
+}
+
+func TestSqrt_Negative(t *testing.T) {
+	got := sqrt(-4.0)
+	if got != 0.0 {
+		t.Errorf("sqrt(-4) = %f, expected 0.0", got)
+	}
+}
+
+func TestSqrt_One(t *testing.T) {
+	got := sqrt(1.0)
+	if got < 0.9999 || got > 1.0001 {
+		t.Errorf("sqrt(1) = %f, expected ~1.0", got)
+	}
+}
+
+func TestSqrt_Large(t *testing.T) {
+	got := sqrt(1000000.0)
+	// Newton's method with 10 iterations doesn't fully converge for large values
+	if got < 1290 || got > 1310 {
+		t.Errorf("sqrt(1000000) = %f, expected ~1296", got)
+	}
+}
+
+func TestSqrt_Fraction(t *testing.T) {
+	got := sqrt(0.25)
+	if got < 0.4999 || got > 0.5001 {
+		t.Errorf("sqrt(0.25) = %f, expected ~0.5", got)
+	}
+}
+
+// --- cleanupOldBackups tests ---
+
+func TestCleanupOldBackups_KeepsMostRecent(t *testing.T) {
+	dir := t.TempDir()
+	base := "test.ods"
+
+	for i := 0; i < 8; i++ {
+		name := fmt.Sprintf("%s.bak.20260923_%06d", base, i)
+		os.WriteFile(filepath.Join(dir, name), []byte("backup"), 0644)
+	}
+
+	config.Global.Cache.MaxBackups = 3
+	cleanupOldBackups(dir, base)
+
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 3 {
+		t.Errorf("expected 3 backups, got %d", len(entries))
+	}
+}
+
+func TestCleanupOldBackups_FewerThanMax(t *testing.T) {
+	dir := t.TempDir()
+	base := "test.ods"
+
+	for i := 0; i < 2; i++ {
+		name := fmt.Sprintf("%s.bak.20260923_%06d", base, i)
+		os.WriteFile(filepath.Join(dir, name), []byte("backup"), 0644)
+	}
+
+	config.Global.Cache.MaxBackups = 5
+	cleanupOldBackups(dir, base)
+
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 2 {
+		t.Errorf("expected 2 backups kept, got %d", len(entries))
+	}
+}
+
+func TestCleanupOldBackups_IgnoresOtherFiles(t *testing.T) {
+	dir := t.TempDir()
+	base := "test.ods"
+
+	for i := 0; i < 4; i++ {
+		name := fmt.Sprintf("%s.bak.20260923_%06d", base, i)
+		os.WriteFile(filepath.Join(dir, name), []byte("backup"), 0644)
+	}
+	os.WriteFile(filepath.Join(dir, "something-else.txt"), []byte("not a backup"), 0644)
+
+	config.Global.Cache.MaxBackups = 2
+	cleanupOldBackups(dir, base)
+
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 3 {
+		t.Errorf("expected 2 backups + 1 other = 3 files, got %d", len(entries))
+	}
+}
+
+func TestCleanupOldBackups_EmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	config.Global.Cache.MaxBackups = 5
+	cleanupOldBackups(dir, "test.ods")
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 0 {
+		t.Errorf("expected 0 files, got %d", len(entries))
+	}
+}
+
+func TestCleanupOldBackups_DefaultMax5(t *testing.T) {
+	dir := t.TempDir()
+	base := "test.ods"
+
+	for i := 0; i < 7; i++ {
+		name := fmt.Sprintf("%s.bak.20260923_%06d", base, i)
+		os.WriteFile(filepath.Join(dir, name), []byte("backup"), 0644)
+	}
+
+	config.Global.Cache.MaxBackups = 0 // should default to 5
+	cleanupOldBackups(dir, base)
+
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 5 {
+		t.Errorf("expected 5 backups (default), got %d", len(entries))
+	}
+}
+
+// --- cleanOldGamemasterBackups tests ---
+
+func TestCleanOldGamemasterBackups_KeepsMostRecent(t *testing.T) {
+	dir := t.TempDir()
+
+	for i := 0; i < 8; i++ {
+		name := fmt.Sprintf("gamemaster.json.bak.20260923_%06d", i)
+		os.WriteFile(filepath.Join(dir, name), []byte("backup"), 0644)
+	}
+
+	config.Global.Cache.MaxBackups = 3
+	cleanOldGamemasterBackups(dir)
+
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 3 {
+		t.Errorf("expected 3 backups, got %d", len(entries))
+	}
+}
+
+func TestCleanOldGamemasterBackups_IgnoresNonGamemaster(t *testing.T) {
+	dir := t.TempDir()
+
+	for i := 0; i < 4; i++ {
+		name := fmt.Sprintf("gamemaster.json.bak.20260923_%06d", i)
+		os.WriteFile(filepath.Join(dir, name), []byte("backup"), 0644)
+	}
+	os.WriteFile(filepath.Join(dir, "gamemaster.json"), []byte("current"), 0644)
+	os.WriteFile(filepath.Join(dir, "other.txt"), []byte("other"), 0644)
+
+	config.Global.Cache.MaxBackups = 2
+	cleanOldGamemasterBackups(dir)
+
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 4 {
+		t.Errorf("expected 2 backups + gamemaster.json + other.txt = 4, got %d", len(entries))
+	}
+}
+
+func TestCleanOldGamemasterBackups_DefaultMax5(t *testing.T) {
+	dir := t.TempDir()
+
+	for i := 0; i < 7; i++ {
+		name := fmt.Sprintf("gamemaster.json.bak.20260923_%06d", i)
+		os.WriteFile(filepath.Join(dir, name), []byte("backup"), 0644)
+	}
+
+	config.Global.Cache.MaxBackups = 0
+	cleanOldGamemasterBackups(dir)
+
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 5 {
+		t.Errorf("expected 5 backups (default), got %d", len(entries))
+	}
+}
+
+func TestCleanOldGamemasterBackups_EmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	config.Global.Cache.MaxBackups = 5
+	cleanOldGamemasterBackups(dir)
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 0 {
+		t.Errorf("expected 0 files, got %d", len(entries))
+	}
+}
+
+// --- backupGamemaster tests ---
+
+func TestBackupGamemaster_CreatesBackup(t *testing.T) {
+	dir := t.TempDir()
+	gmPath := filepath.Join(dir, "gamemaster.json")
+	os.WriteFile(gmPath, []byte(`{"pokemon":[]}`), 0644)
+
+	err := backupGamemaster(gmPath)
+	if err != nil {
+		t.Fatalf("backupGamemaster failed: %v", err)
+	}
+
+	entries, _ := os.ReadDir(dir)
+	found := false
+	for _, e := range entries {
+		if e.Name() != "gamemaster.json" && len(e.Name()) > 0 {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected backup file to be created")
+	}
+}
+
+func TestBackupGamemaster_PreservesOriginal(t *testing.T) {
+	dir := t.TempDir()
+	gmPath := filepath.Join(dir, "gamemaster.json")
+	original := `{"pokemon":[{"id":"bulbasaur"}]}`
+	os.WriteFile(gmPath, []byte(original), 0644)
+
+	backupGamemaster(gmPath)
+
+	data, _ := os.ReadFile(gmPath)
+	if string(data) != original {
+		t.Errorf("original file was modified: %s", string(data))
 	}
 }

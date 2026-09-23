@@ -16,11 +16,14 @@ type PvPTeam struct {
 }
 
 type pvpScored struct {
-	pokemon   model.Pokemon
-	score     float64
-	typeSet   map[string]bool
-	cpEff     float64
-	typeBonus float64
+	pokemon     model.Pokemon
+	score       float64
+	typeSet     map[string]bool
+	moveTypeSet map[string]bool
+	cpEff       float64
+	typeBonus   float64
+	weaknesses  map[string]bool
+	covers      map[string]bool
 }
 
 func GetLeagueCaps() map[string]int {
@@ -42,7 +45,60 @@ func LeagueTier(p model.Pokemon, league string) string {
 	return ""
 }
 
-func BuildPvPTeams(c []model.Pokemon, league string) []PvPTeam {
+func typeWeaknesses(types []string) map[string]bool {
+	weaknesses := map[string]bool{}
+	for _, t := range types {
+		for _, w := range CounterType(t) {
+			weaknesses[w] = true
+		}
+	}
+	return weaknesses
+}
+
+func typeCovers(types []string) map[string]bool {
+	covers := map[string]bool{}
+	for _, t := range types {
+		for _, c := range SuperEffective[t] {
+			covers[c] = true
+		}
+	}
+	return covers
+}
+
+func moveTypes(p model.Pokemon, moveMap map[string]*gamemaster.MoveEntry) map[string]bool {
+	types := map[string]bool{}
+	for _, moveName := range []string{p.FastMove, p.Charged1, p.Charged2} {
+		if moveName == "" {
+			continue
+		}
+		entry := moveMap[normalizeMoveID(moveName)]
+		if entry != nil {
+			types[entry.Type] = true
+		}
+	}
+	return types
+}
+
+func allTypes(typeSet, moveTypeSet map[string]bool) map[string]bool {
+	combined := map[string]bool{}
+	for t := range typeSet {
+		combined[t] = true
+	}
+	for t := range moveTypeSet {
+		combined[t] = true
+	}
+	return combined
+}
+
+func combinedKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func BuildPvPTeams(c []model.Pokemon, league string, moveMap map[string]*gamemaster.MoveEntry) []PvPTeam {
 	cap := GetLeagueCaps()[league]
 
 	var candidates []model.Pokemon
@@ -57,14 +113,6 @@ func BuildPvPTeams(c []model.Pokemon, league string) []PvPTeam {
 		if gamemaster.TierRank(tier) >= gamemaster.TierRank("B") {
 			candidates = append(candidates, p)
 		}
-	}
-
-	type scored struct {
-		pokemon  model.Pokemon
-		score    float64
-		typeSet  map[string]bool
-		cpEff    float64
-		typeBonus float64
 	}
 
 	var items []pvpScored
@@ -86,16 +134,24 @@ func BuildPvPTeams(c []model.Pokemon, league string) []PvPTeam {
 			}
 		}
 
+		moveTypeSet := moveTypes(p, moveMap)
+
 		var typeBonus float64
 		if len(typeSet) > 1 {
 			typeBonus = 5
 		}
 
+		combined := allTypes(typeSet, moveTypeSet)
+
 		item := pvpScored{
-			pokemon:   p,
-			cpEff:     cpEff,
-			typeBonus: typeBonus,
-			score:     p.DevScore + cpEff*10 + typeBonus,
+			pokemon:     p,
+			cpEff:       cpEff,
+			typeSet:     typeSet,
+			moveTypeSet: moveTypeSet,
+			typeBonus:   typeBonus,
+			score:       p.DevScore + cpEff*10 + typeBonus,
+			weaknesses:  typeWeaknesses(p.Types),
+			covers:      typeCovers(combinedKeys(combined)),
 		}
 		items = append(items, item)
 	}
@@ -104,12 +160,15 @@ func BuildPvPTeams(c []model.Pokemon, league string) []PvPTeam {
 		return items[i].score > items[j].score
 	})
 
+	roleMultipliers := [3]float64{0.8, 1.0, 1.2}
+
 	used := make([]bool, len(items))
 	var teams []PvPTeam
 
 	for len(teams) < 3 {
 		var teamMembers []pvpScored
-		var teamTypes []map[string]bool
+		teamTypeCounts := map[string]int{}
+		teamWeaknesses := map[string]bool{}
 
 		for round := 0; round < 3; round++ {
 			bestIdx := -1
@@ -120,23 +179,46 @@ func BuildPvPTeams(c []model.Pokemon, league string) []PvPTeam {
 					continue
 				}
 
-				overlap := false
-				for _, tt := range teamTypes {
-					for t := range item.typeSet {
-						if tt[t] {
-							overlap = true
-							break
-						}
-					}
-					if overlap {
+				// Hard cap: max 2 of any single type (combined = pokemon type + move types)
+				combined := allTypes(item.typeSet, item.moveTypeSet)
+				skip := false
+				for t := range combined {
+					if teamTypeCounts[t] >= 2 {
+						skip = true
 						break
+					}
+				}
+				if skip {
+					continue
+				}
+
+				// Type overlap penalty (combined)
+				overlap := 0
+				for t := range combined {
+					overlap += teamTypeCounts[t]
+				}
+
+				// Weakness overlap (exponential)
+				weaknessOverlap := 0
+				for w := range teamWeaknesses {
+					if item.weaknesses[w] {
+						weaknessOverlap++
+					}
+				}
+
+				// Coverage bonus
+				coverageCount := 0
+				for w := range teamWeaknesses {
+					if item.covers[w] {
+						coverageCount++
 					}
 				}
 
 				score := item.score
-				if overlap {
-					score -= 20
-				}
+				score -= float64(overlap) * 20.0
+				score -= weaknessExponential(weaknessOverlap)
+				score += float64(coverageCount) * 5.0
+				score *= roleMultipliers[round]
 
 				if score > bestScore {
 					bestScore = score
@@ -150,7 +232,12 @@ func BuildPvPTeams(c []model.Pokemon, league string) []PvPTeam {
 
 			used[bestIdx] = true
 			teamMembers = append(teamMembers, items[bestIdx])
-			teamTypes = append(teamTypes, items[bestIdx].typeSet)
+			for t := range allTypes(items[bestIdx].typeSet, items[bestIdx].moveTypeSet) {
+				teamTypeCounts[t]++
+			}
+			for w := range items[bestIdx].weaknesses {
+				teamWeaknesses[w] = true
+			}
 		}
 
 		if len(teamMembers) < 3 {
@@ -170,6 +257,21 @@ func BuildPvPTeams(c []model.Pokemon, league string) []PvPTeam {
 	}
 
 	return teams
+}
+
+func weaknessExponential(overlap int) float64 {
+	switch overlap {
+	case 0:
+		return 0
+	case 1:
+		return 10
+	case 2:
+		return 30
+	case 3:
+		return 60
+	default:
+		return 100
+	}
 }
 
 func detectStyle(members []pvpScored) string {

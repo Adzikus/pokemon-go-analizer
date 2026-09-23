@@ -1,0 +1,211 @@
+# Analiza Pokemon -- {{.Konto}} -- {{.Date}}
+
+---
+
+## 1. Ogolne podsumowanie
+
+### Podsumowanie kolekcji
+
+- **Laczna ilosc Pokemon:** {{.Stats.Total}}
+- **Shiny:** {{.Stats.Shiny}} ({{pct .Stats.Shiny .Stats.Total}}%)
+- **Lucky:** {{.Stats.Lucky}} ({{pct .Stats.Lucky .Stats.Total}}%)
+- **Shadow:** {{.Stats.Shadow}} ({{pct .Stats.Shadow .Stats.Total}}%)
+- **Purified:** {{.Stats.Purified}} ({{pct .Stats.Purified .Stats.Total}}%)
+- **Dynamax:** {{.Stats.Dynamax}} ({{pct .Stats.Dynamax .Stats.Total}}%)
+- **Trade'owane:** {{.Stats.Traded}} ({{pct .Stats.Traded .Stats.Total}}%)
+- **HUNDO (100%% IV):** {{.Stats.Hundo}} ({{pct .Stats.Hundo .Stats.Total}}%)
+- **High IV (>=90%%):** {{.Stats.HighIV}} ({{pct .Stats.HighIV .Stats.Total}}%)
+- **Rodziny ewolucyjne:** {{.Stats.Families}}
+
+### TOP 10 HUNDO
+
+| # | Pokemon | CP | Lucky | Purpose |
+|--:|---------|---:|:-----:|---------|
+{{range $i, $p := .TopHundo}}| {{inc $i}} | **{{$p.Species}}** | {{$p.CP}} | {{boolStr $p.IsLucky}} | {{purposeLabel $p}} |
+{{end}}
+### TOP 10 CP
+
+| # | Pokemon | CP | IV% | Lucky | Purpose |
+|--:|---------|---:|----:|:-----:|---------|
+{{range $i, $p := .TopCP}}| {{inc $i}} | **{{$p.Species}}** | {{$p.CP}} | {{printf "%.1f" $p.IVPct}}% | {{boolStr $p.IsLucky}} | {{purposeLabel $p}} |
+{{end}}
+### TOP 10 Dynamax
+
+| # | Pokemon | CP | IV% | Tier |
+|--:|---------|---:|----:|:----:|
+{{range $i, $p := .TopDynamax}}| {{inc $i}} | **{{$p.Species}}** | {{$p.CP}} | {{printf "%.1f" $p.IVPct}}% | {{tierOrDash $p}} |
+{{end}}
+### TOP 10 Shadow
+
+| # | Pokemon | CP | IV% | Tier | Score |
+|--:|---------|---:|----:|:----:|------:|
+{{range $i, $p := .TopShadow}}| {{inc $i}} | **{{$p.Species}}** | {{$p.CP}} | {{printf "%.1f" $p.IVPct}}% | {{tierOrDash $p}} | {{printf "%.1f" $p.DevScore}} |
+{{end}}
+### TOP 10 Shiny
+
+| # | Pokemon | CP | IV% | Tier | Lucky |
+|--:|---------|---:|----:|:----:|:-----:|
+{{range $i, $p := .TopShiny}}| {{inc $i}} | **{{$p.Species}}** | {{$p.CP}} | {{printf "%.1f" $p.IVPct}}% | {{tierOrDash $p}} | {{boolStr $p.IsLucky}} |
+{{end}}
+### TOP 10 Power-Up
+
+| # | Pokemon | CP | IV% | Raid Tier | Score |
+|--:|---------|---:|----:|:---------:|------:|
+{{range $i, $p := .TopPowerUp}}| {{inc $i}} | **{{$p.Species}}** | {{$p.CP}} | {{printf "%.1f" $p.IVPct}}% | {{tierOrDash $p}} | {{printf "%.1f" $p.DevScore}} |
+{{end}}
+_Wykluczone: Pokemon z Purpose=PvP na GL cap (CP>=1450) oraz Pokemon na max CP. Sortowanie wg DevScore._
+
+### TOP 10 Dev Score
+
+| # | Pokemon | CP | IV% | Raid Tier | Score |
+|--:|---------|---:|----:|:---------:|------:|
+{{range $i, $p := .TopDevScore}}| {{inc $i}} | **{{$p.Species}}** | {{$p.CP}} | {{printf "%.1f" $p.IVPct}}% | {{tierOrDash $p}} | {{printf "%.1f" $p.DevScore}} |
+{{end}}
+### TOP 10 per kontekst
+
+{{range $ctx := .Contexts}}#### {{$ctx.Name}} (Tier S/A+)
+
+| # | Pokemon | CP | IV% | Tier | Rank | Score |
+|--:|---------|---:|----:|:----:|-----:|------:|
+{{range $i, $p := $ctx.Top10}}| {{inc $i}} | **{{$p.Species}}** | {{$p.CP}} | {{printf "%.1f" $p.IVPct}}% | {{$p.Tier}} | #{{$p.Rank}} | {{printf "%.1f" $p.Score}} |
+{{end}}
+{{end}}
+{{if .MetaRows}}### Meta vs Collection (Raid Attackers TOP 20)
+
+| # | Pokemon | Tier | Masz? | Ile | Najl. IV | Lucky | Score |
+|--:|---------|:----:|:-----:|----:|---------:|:-----:|------:|
+{{range $r := .MetaRows}}| {{$r.Position}} | {{$r.Name}} | {{$r.Tier}} | {{if $r.Owned}}✓{{else}}✗{{end}} | {{$r.Copies}} | {{if $r.Owned}}{{printf "%.1f" $r.BestIV}}%{{else}}-{{end}} | {{if $r.Owned}}{{if $r.IsLucky}}TAK{{else}}NIE{{end}}{{else}}-{{end}} | {{if $r.Owned}}{{printf "%.1f" $r.Score}}{{else}}0.0{{end}} |
+{{end}}
+**Meta Coverage:** {{.MetaOwned}}/{{.MetaTotal}} ({{pct .MetaOwned .MetaTotal}}%)
+{{if .MetaMissing}} — brak: {{join .MetaMissing ", "}}{{end}}
+
+{{end}}
+### Uwagi ogolne
+
+- Lucky rate: {{pct .Stats.Lucky .Stats.Total}}% ({{.Stats.Lucky}}/{{.Stats.Total}})
+- Shadow: {{.Stats.Shadow}}, Purified: {{.Stats.Purified}}
+- Dynamax: {{.Stats.Dynamax}}
+
+---
+
+## 2. Rajdy -- Zalecane Zespoly
+
+{{range $type := .RaidTypes}}### vs {{title $type.Type}}-type
+
+| # | UID | Pokemon | ATK | DPS | Optimal | MoveDPS (fast/charged) | Moves (actual) | Moves (best) | IV | CP |
+|--:|-----|---------|----:|----:|--------:|-----------------------|----------------|--------------|---:|---:|
+{{range $i, $r := $type.Counters}}| {{inc $i}} | {{$r.Pokemon.UID}} | **{{$r.Pokemon.Species}}** | {{printf "%.0f" $r.Pokemon.EffectiveATK}} | {{printf "%.1f" $r.DPS}} | {{printf "%.1f" $r.OptimalDPS}} | {{moveDPS $r.Pokemon}} | {{movesActual $r}} | {{movesBest $r}} | {{printf "%.1f" $r.Pokemon.IVPct}}% | {{$r.Pokemon.CP}} |
+{{end}}
+{{end}}
+### Uniwersalny (wszystkie typy)
+
+{{if .UniversalCounters}}| # | UID | Pokemon | ATK | DPS | Optimal | MoveDPS (fast/charged) | Moves (actual) | Moves (best) | IV | CP |
+|--:|-----|---------|----:|----:|--------:|-----------------------|----------------|--------------|---:|---:|
+{{range $i, $r := .UniversalCounters}}| {{inc $i}} | {{$r.Pokemon.UID}} | **{{$r.Pokemon.Species}}** | {{printf "%.0f" $r.Pokemon.EffectiveATK}} | {{printf "%.1f" $r.DPS}} | {{printf "%.1f" $r.OptimalDPS}} | {{moveDPS $r.Pokemon}} | {{movesActual $r}} | {{movesBest $r}} | {{printf "%.1f" $r.Pokemon.IVPct}}% | {{$r.Pokemon.CP}} |
+{{end}}{{else}}Brak Pokemon z CP >= 1000.{{end}}
+
+---
+
+## 3. Zestawy do PvP -- Gotowe druzyny 3v3
+
+{{range $league := .Leagues}}### {{$league.FullName}}
+
+{{if $league.Teams}}{{range $team := $league.Teams}}**{{$team.Name}}:**
+{{range $i, $m := $team.Members}}- **{{index $league.Roles $i}}:** {{$m.Species}} -- IV {{printf "%.1f" $m.IVPct}}%, CP {{$m.CP}}, Tier {{tierOrDashLeague $m $league.Key}}, Score {{leagueScore $m $league.Key}}
+{{end}}
+{{end}}{{else}}Brak wystarczajacych kandydatow.{{end}}
+{{end}}
+### Podsumowanie PvP -- wszystkie ligi
+
+{{if .PvPSummary}}| Pokemon | CP | IV% | GL Tier | UL Tier | ML Tier | DevScore |
+|---------|---:|----:|:-------:|:-------:|:-------:|---------:|
+{{range $p := .PvPSummary}}| **{{$p.Species}}** | {{$p.CP}} | {{printf "%.1f" $p.IVPct}}% | {{strOrDash $p.GLTier}} | {{strOrDash $p.ULTier}} | {{strOrDash $p.MLTier}} | {{printf "%.1f" $p.DevScore}} |
+{{end}}{{else}}Brak Pokemon z Purpose=PvP.{{end}}
+
+---
+
+## 4. Kandydaci do Transferu
+
+### Bezpieczne do transferu ({{len .SafeTransfer}} szt.)
+
+{{range $i, $r := .SafeTransfer}}{{if lt $i 30}}- **{{$r.Pokemon.Species}}** -- IV {{printf "%.1f" $r.Pokemon.IVPct}}%, CP {{$r.Pokemon.CP}}, Tier {{tierOrDash $r.Pokemon}}
+{{end}}{{end}}{{if gt (len .SafeTransfer) 30}}... i {{sub (len .SafeTransfer) 30}} wiecej{{end}}
+
+{{if .TradeTransfer}}### Do Handlu (TRADE) ({{len .TradeTransfer}} szt.)
+
+{{range $r := .TradeTransfer}}- **{{$r.Pokemon.Species}}** -- IV {{printf "%.1f" $r.Pokemon.IVPct}}%, CP {{$r.Pokemon.CP}}, {{$r.Reason}}
+{{end}}
+{{end}}
+{{if .SoftKeepTransfer}}### Ostrzezenia (SOFT KEEP)
+
+{{range $r := .SoftKeepTransfer}}- **{{$r.Pokemon.Species}}** -- {{$r.Reason}}
+{{end}}
+{{end}}
+### NIE TRANSFERUJ (zachowaj)
+
+- **Shiny** -- nawet slabych IV, unikalne
+- **Lucky** -- 50% Stardust discount, wartosc handlowa
+- **Shadow** -- potencjal Frustration -> Return po eventach
+- **HUNDO (100% IV)** -- perfekcyjne IV
+- **High IV (>=90%) + meta S/A** -- meta-relevantne
+- **Kolekcja / Trade / Lucky Trade** -- oznaczone przez uzytkownika
+- **Dynamax** -- nowa mechanika, Max Moves
+- **Purified + Return** -- przydatne w PvP
+
+---
+
+## 5. Poszukiwani do statusu Lucky -- Priorytety Lucky Trades
+
+{{if .LuckyTargets}}{{range $t := .LuckyTargets}}- **{{$t.Reason}}** (score {{printf "%.0f" $t.Score}}) -- {{if $t.HasLucky}}MASZ Lucky{{else}}BRAK Lucky{{end}}
+{{end}}{{else}}Brak kandydatow -- wszystkie gatunki maja juz status Lucky.{{end}}
+
+### Strategia Lucky Trade
+
+1. Handel to jedyny sposob na uzyskanie Lucky -- im wiecej handlujesz, tym wyzszy rate
+2. Gwarantowany Lucky Trade (Lucky Friend) przeznaczaj na legendy, ktorych nie masz
+3. Nie handluj HUNDO -- juz sa idealne
+4. Im starszy Pokemon (wiek w kolekcji), tym wyzsza szansa na Lucky
+5. Candy XL z handlu zalezy od odleglosci lapania (100km+ = 100% szansa XL)
+
+---
+
+## 6. Szczegolowa analiza -- Ocena 1-10
+
+### Legendary / Mythical
+
+{{if .Legendary}}{{range $p := .Legendary}}- **{{$p.Species}}** -- {{tierContext $p}} | Ocena: {{rating $p.DevScore}}/10, IV {{printf "%.1f" $p.IVPct}}%, Lucky: {{boolStr $p.IsLucky}}, Rekomendacja: {{recommendation $p}}
+{{end}}{{else}}Brak legendarnych w kolekcji.{{end}}
+
+### HUNDO
+
+{{if .HundoDetail}}{{range $p := .HundoDetail}}- **{{$p.Species}}** -- CP {{$p.CP}}, Lucky: {{boolStr $p.IsLucky}}, Shadow: {{boolStr $p.IsShadow}}, RaidTier: {{strOrDash $p.RaidTier}}, Rekomendacja: MAX OUT (L50)
+{{end}}{{else}}Brak HUNDO.{{end}}
+
+### Shadow -- Frustration -> Return
+
+{{if .ShadowDetail}}{{range $p := .ShadowDetail}}- **{{$p.Species}}** -- IV {{printf "%.1f" $p.IVPct}}%, Lucky: {{boolStr $p.IsLucky}}, {{tierContext $p}}, Ocena: {{rating $p.DevScore}}/10, Rekomendacja: {{recommendation $p}}
+{{end}}{{else}}Brak Shadow.{{end}}
+
+### PvP Relevant
+
+{{if .PvPDetail}}{{range $p := .PvPDetail}}- **{{$p.Species}}** -- IV {{printf "%.1f" $p.IVPct}}%, CP {{$p.CP}}, Lucky: {{boolStr $p.IsLucky}}, {{tierContext $p}}, Moves: {{strOrDash $p.FastMove}}/{{strOrDash $p.Charged1}}/{{strOrDash $p.Charged2}}, Ocena: {{rating $p.DevScore}}/10
+{{end}}{{else}}Brak PvP-relevantnych.{{end}}
+
+### Shiny
+
+{{if .ShinyDetail}}{{range $p := .ShinyDetail}}- **{{$p.Species}}** -- IV {{printf "%.1f" $p.IVPct}}%, Lucky: {{boolStr $p.IsLucky}}{{if index $.MetaStars $p.SpeciesID}} [META]{{end}}, {{tierContext $p}}, Ocena: {{rating $p.DevScore}}/10, Rekomendacja: {{recommendation $p}}
+{{end}}{{else}}Brak Shiny.{{end}}
+
+### Inne (Dynamax / Purified / Traded)
+
+{{if .OtherDetail}}{{range $p := .OtherDetail}}- **{{$p.Species}}** -- IV {{printf "%.1f" $p.IVPct}}%, Tags: {{formatTags $p}}, {{tierContext $p}}, Ocena: {{rating $p.DevScore}}/10, Rekomendacja: {{recommendation $p}}
+{{end}}{{else}}Brak.{{end}}
+
+---
+
+## 7. Wszystkie Pokemon-y -- Ranking Rozwoju ({{len .Collection}} sztuk)
+
+| # | UID | Pokemon | Score | IV% | Lucky | Shadow | Tier | CP | Liga | Moves | Przeznaczenie |
+|--:|-----|---------|------:|----:|:-----:|:------:|:----:|---:|:-----|:------|:-------------|
+{{range $row := .FullRanking}}| {{$row.Rank}} | {{$row.Pokemon.UID}} | **{{$row.Pokemon.Species}}** {{formatEmojis $row.Pokemon}} | {{printf "%.1f" $row.Pokemon.DevScore}} | {{printf "%.1f" $row.Pokemon.IVPct}}% | {{formatLucky $row.Pokemon}} | {{formatShadow $row.Pokemon}} | {{tierOrDash $row.Pokemon}} | {{$row.Pokemon.CP}} | - | {{formatMoves $row.Pokemon}} | {{purposeLabel $row.Pokemon}} |
+{{end}}

@@ -911,72 +911,120 @@ Wszystkie TOP 10 są prezentowane w formacie tabel Markdown.
 
 ##### Co robimy?
 
-Rekomendujemy Pokemon do Rajdów na podstawie **typu bossa** (nie tagu purpose). Każdy boss ma typ ataku — rekomendujemy Pokemon z typami super-effective.
+Rekomendujemy **najlepszych counterów** na bossów raidowych na podstawie **typu bossa** i DPS-u z kolekcji gracza. Każdy boss ma typ ataku — rekomendujemy Pokemon, które zadają największe obrażenia na sekundę.
 
-##### Dlaczego nie filtrujemy po purpose?
+##### Dlaczego DPS, a nie purpose?
 
-Pokemon oznaczony jako "PvP" (np. UL, max CP 3800) może być **świetnym raid attackerem** jeśli jego typy są super-effective przeciwko bossowi. Filtr po purpose odrzuca takeCases.
+Pokemon oznaczony jako "PvP" (np. UL, max CP 3800) może być **świetnym raid attackerem** jeśli jego typy są super-effective przeciwko bossowi. Filtr po purpose odrzuca takeCases. DPS jest obiektywną miarą.
+
+##### Wzór DPS
+
+```
+Damage = 0.5 × Power × (ATK / DEF) × STAB × Effectiveness
+
+Gdzie:
+  ATK = (BaseAtk + IVAtk) × GetCPM(40) × ShadowBonus
+  DEF = BossDefenseRef ( stała: 162.3 )
+  STAB = 1.2 (jeśli typ ruchu = typ Pokemon)
+  Effectiveness = 1.6 (super-effective) lub 1.0 (neutralny)
+  GetCPM(40) = 0.7903 (CPM level 40, z oficjalnej tabeli CPM)
+  ShadowBonus = 1.2 (jeśli Pokemon jest Shadow)
+```
+
+> **Źródło CPM:** Tabela CPM z pokemongohub.net, poziomy 1-50 w 0.5 krokach. `GetCPM(level)` interpolicuje między sąsiednimi wartościami.
 
 ##### Algorytm
 
 ```
-1. Dla każdego typu bossa (Dark, Psychic, Fire...):
-   - Określ typy super-effective
-     (np. Dark boss → Fighting, Bug, Fairy)
-   - Dla każdego Pokemon z kolekcji (CP >= 1000):
-     - Oblicz ATK/DEF ratio: (BaseAtk + IVAtk) * CPM_L40 * ShadowBonus / BossDEF
-     - Oblicz DPS z bieżącymi ruchami (STAB + Effectiveness)
-     - Znajdź optymalne ruchy (maksymalny DPS)
+1. Dla każdego typu bossa (18 typów + uniwersalny):
+   a. Określ typy counterów (np. Dark boss → Fighting, Bug, Fairy)
+   b. Dla każdego Pokemon z kolekcji (CP >= min_cp z config):
+      - Oblicz DPS z bieżącymi ruchami (fast + charged)
+        DPS = fastDPS + chargedDPSContrib
+        fastDPS = (0.5 × fastPower × atkDefRatio) / (fastCD / 1000)
+        chargedDPSContrib = (0.5 × chargedPower × atkDefRatio) / timeToCharge
+        timeToCharge = (chargedEnergy / fastEnergy) × (fastCD / 1000)
+      - Znajdź optymalne ruchy (maksymalny DPS ze wszystkich kombinacji)
    - Sortuj: DPS DESC → TOP N per typ bossa
 
-2. Uniwersalny ranking:
-   - Wszystkie Pokemon z CP >= 1000
-   - Effectiveness = 1.0 (neutralne)
+2. Uniwersalny ranking (Effectiveness = 1.0):
+   - Wszystkie Pokemon z CP >= min_cp
    - Sortuj: DPS DESC → TOP 10
 
-3. Kolumny w raporcie:
-   - ATK: efektywny statystyk ataku Pokemon
-   - DPS: obrażenia na sekundę (z ruchami bieżącymi)
-   - Optimal: DPS z optymalnymi ruchami
-   - MoveDPS: surowy DPS ruchów (bez statystyk Pokemon)
+3. Raport: tabela per typ bossa
 ```
 
-##### Typy bossów → Super-effective
+##### Typy bossów → Countery (super-effective)
 
-| Typ bossa | Super-effective |
-|-----------|----------------|
+| Typ bossa | Countery (SE) |
+|-----------|---------------|
+| Bug | Fire, Flying, Rock |
 | Dark | Fighting, Bug, Fairy |
-| Psychic | Dark, Bug, Ghost |
-| Fire | Water, Ground, Rock |
-| Water | Electric, Grass |
-| Grass | Fire, Ice, Poison, Flying, Bug |
+| Dragon | Ice, Dragon, Fairy |
 | Electric | Ground |
+| Fairy | Poison, Steel |
+| Fighting | Flying, Psychic, Fairy |
+| Fire | Water, Ground, Rock |
+| Flying | Electric, Ice, Rock |
+| Ghost | Ghost, Dark |
+| Grass | Fire, Ice, Poison, Flying, Bug |
 | Ground | Water, Grass, Ice |
 | Ice | Fire, Fighting, Rock, Steel |
-| Fighting | Flying, Psychic, Fairy |
+| Normal | Fighting |
 | Poison | Ground, Psychic |
-| Ground | Water, Grass, Ice |
-| Flying | Electric, Ice, Rock |
-| Psychic | Dark, Bug, Ghost |
-| Bug | Fire, Flying, Rock |
+| Psychic | Bug, Ghost, Dark |
 | Rock | Water, Grass, Fighting, Ground, Steel |
-| Ghost | Dark, Ghost |
-| Dragon | Ice, Dragon, Fairy |
 | Steel | Fire, Fighting, Ground |
-| Fairy | Poison, Steel |
+| Water | Electric, Grass |
 
-##### Dane wejściowe / wyjściowe
+##### Struktura RaidDPSResult
 
-| Wejście | Wyjście |
-|---------|---------|
-| `Pokemon[]` (z Kroku 2) | `raid_by_type: Map<TypBossa, RaidResult[]>` — TOP N per typ |
-| `GamemasterData` | Each RaidResult contains: |
-| | - `Pokemon` — dane Pokemon |
-| | - `DPS` — obrażenia na sekundę (z ATK/DEF ratio) |
-| | - `OptimalDPS` — DPS z optymalnymi ruchami |
-| | - `MoveDPSFast` — surowy DPS szybkiego ruchu |
-| | - `MoveDPSCharged` — surowy DPS charged ruchu |
-| | `universal: RaidResult[]` — TOP 10 uniwersalnych |
+```yaml
+RaidDPSResult:
+  type: object
+  properties:
+    pokemon:
+      $ref: "#/components/schemas/Pokemon"
+    dps:
+      type: number
+      format: float
+      description: "DPS z bieżącymi ruchami"
+    optimalDps:
+      type: number
+      format: float
+      description: "DPS z optymalnymi ruchami"
+    fastMove:
+      type: string
+      description: "Nazwa szybkiego ruchu"
+    chargedMove:
+      type: string
+      description: "Nazwa charged ruchu"
+    bestFast:
+      type: string
+      description: "Optymalny szybki ruch"
+    bestCharged:
+      type: string
+      description: "Optymalny charged ruch"
+    superEff:
+      type: boolean
+      description: "Czy ruchy są super-effective"
+```
+
+##### Kolumny w raporcie
+
+| Kolumna | Format | Opis |
+|---------|--------|------|
+| # | int | Pozycja w rankingu |
+| UID | string | Unikalny ID Pokemon |
+| Pokemon | string | Nazwa (pogrubiona) |
+| ATK | float64 | Efektywny ATK (BaseAtk + IVAtk) × CPM × Shadow |
+| DPS | float64 | DPS z bieżącymi ruchami |
+| Optimal | float64 | DPS z optymalnymi ruchami |
+| MoveDPS | string | "fast / charged" — surowy DPS ruchów |
+| Moves (actual) | string | Aktualne ruchy |
+| Moves (best) | string | Optymalne ruchy |
+| IV | float64 | IV% |
+| CP | int | Combat Power |
 
 ##### Diagram — Sekcja 2
 
@@ -989,26 +1037,27 @@ start
 
 :Pokemon[] (z Kroku 2);
 
-partition "Raid Counters per Typ Bossa" {
+partition "Raid Rankings per Typ Bossa" {
     :Dla kazdego typu bossa
-    (Dark, Psychic, Fire...);
-    :Określ typy super-effective;
-    :Dla każdego Pokemon (CP >= 1000):
-    - Oblicz ATK/DEF ratio
+    (18 typow + uniwersalny);
+    :Określ typy counterow (SE);
+    :Dla kazdego Pokemon (CP >= min_cp):
+    - Oblicz EffectiveATK
     - Oblicz DPS (STAB + Effectiveness)
-    - Znajdź optymalne ruchy;
+    - Znajdz optymalne ruchy;
     :Sortuj: DPS DESC;
     :TOP N per typ;
 }
 
 partition "Universal Ranking" {
-    :Wszystkie Pokemon (CP >= 1000);
-    :Effectiveness = 1.0 (neutral);
+    :Wszystkie Pokemon (CP >= min_cp);
+    :Effectiveness = 1.0 (neutralny);
     :Sortuj: DPS DESC;
     :TOP 10 uniwersalnych;
 }
 
-:Sekcja 2 Output;
+:Sekcja 2 Output
+(per-type counters + universal);
 
 stop
 
@@ -1023,91 +1072,88 @@ stop
 
 ##### Co robimy?
 
-Dla każdej ligi (GL/UL/ML) filtrujemy Pokemon po CP, sortujemy po meta tier i generujemy propozycje drużyn 3v3.
+Dla każdej ligi (GL/UL/ML) filtrujemy Pokemon po CP, oceniamy je wg DevScore i generujemy **drużyny 3v3** algorytmem greedy z uwzględnieniem typów.
 
 ##### Konfiguracja lig
 
-> Standardowe ligi definiowane przez CP limit. Specjalne pucharki z `gamemaster.formats`.
+> CP-limity pobierane z `config.Global.PVP.LeagueCaps`. Brak hardkodowania.
 
-| Liga | CP Limit | Cup (gamemaster) | Meta Source |
-|------|----------|------------------|-------------|
-| Great League | 1500 | — (default) | `great_league_overall` |
-| Ultra League | 2500 | — (default) | `ultra_league_overall` |
-| Master League | Brak limitu | — (default) | `master_league_overall` |
-| Mega Master League | 10000 | `mega` | `mega` |
-| Master Premier | 10000 | `premier` | `premiermaster` |
-| *+ specjalne pucharki* | *1500* | *z gamemaster* | *per cup* |
+| Liga | CP Limit | Źródło |
+|------|----------|--------|
+| Great League | 1500 | `config.Global.PVP.LeagueCaps["GL"]` |
+| Ultra League | 2500 | `config.Global.PVP.LeagueCaps["UL"]` |
+| Master League | 0 (bez limitu) | `config.Global.PVP.LeagueCaps["ML"]` |
 
-> **Źródło:** `gamemaster.formats[]` — każdy format ma `cup`, `cp`, `meta`.
-
-##### Algorytm
+##### Algorytm — Greedy Type-Aware Builder
 
 ```
-1. Wczytaj konfiguracje lig z gamemaster.formats[]
-   (lub użyj defaultowych: GL/UL/ML)
+1. FILTRUJ kandydatów per liga:
+   - cp <= cap (dla GL/UL) lub brak limitu (ML)
+   - cp >= cap - 200 (blisko capu)
+   - tier rank < B (S/A+/A/B+ — sortowane po score)
 
-2. ROWNOLEGLE per liga (fork):
-   - Pobierz CP limit z format.cp
-   - Pobierz meta source z format.meta
-   - FILTRUJ: cp per zakres ligi
-   - FILTRUJ: meta_tier S/A/B (z ligowych rankingów)
-   - SORTUJ: dev_score DESC
-   - GRUPUJ per styl (balanced/aggressive/defensive)
-   - GENERUJ druzyny 3v3 (lead/switch/closer)
-   - ANALIZA coverage (typy pokryte/brakujące)
+2. PUNKTACJA kandydata:
+   score = DevScore + cpEfficiency × 10 + typeBonus × 5
+   gdzie:
+     cpEfficiency = cp / cap (max 1.0, dla ML = 1.0)
+     typeBonus = 5 (jeśli ma 2+ różne typy, lepsze coverage)
 
-3. POLĄCZ wyniki z workerow
+3. BUDOWA drużyn (max 3):
+   Dla każdej drużyny (3 rundy):
+     a. Wybierz kandydata z najwyższym score
+     b. Jeśli kandydat dzieli typ z już wybranymi:
+        score -= 20 (kara za overlap typów)
+     c. Oznacz jako użytego
+     d. Dodaj do drużyny
+
+4. STYL drużyny (auto-detekcja):
+   avgAtk = sredni ATK kandydatów
+   avgDef = sredni DEF kandydatów
+   ratio = avgAtk / avgDef
+   - ratio > 1.2 → "aggressive" (wysoki atak)
+   - ratio < 0.8 → "defensive" (wysoka obrona)
+   - w przeciwnym razie → "balanced"
 ```
 
 ##### Dane wejściowe / wyjściowe
 
 | Wejście | Wyjście per liga |
 |---------|-----------------|
-| `Pokemon[]` (z Kroku 2) | `candidates: Pokemon[]` — fitują do CP cap |
-| `MetaRankingsData` | `teams: Team[]` — propozycje 3v3 |
-| | `coverage: CoverageAnalysis` — typy pokryte/brakujące |
+| `Pokemon[]` (z Kroku 2) | `teams: PvPTeam[]` — max 3 drużyny 3v3 |
+| `config.Global.PVP.LeagueCaps` | `style: string` — aggressive/balanced/defensive |
 
-##### Struktura Team
+##### Struktury danych
 
 ```yaml
-Team:
+PvPTeam:
   type: object
   properties:
     name:
       type: string
-      example: "Team A — Ballanced"
+      example: "Druzyna A"
     style:
       type: string
-      enum: [balanced, aggressive, defensive]
+      enum: [aggressive, balanced, defensive]
     members:
       type: array
       minItems: 3
       maxItems: 3
       items:
-        $ref: "#/components/schemas/TeamMember"
-    coverage:
-      type: array
-      items:
-        type: string
-      description: "Typy pokryte przez drużynę"
-    weaknesses:
-      type: array
-      items:
-        type: string
-      description: "Typy słabe (brak counterów)"
-
-TeamMember:
-  type: object
-  properties:
-    role:
-      type: string
-      enum: [lead, switch, closer]
-    pokemon:
-      $ref: "#/components/schemas/Pokemon"
-    moveset:
-      type: string
-      example: "Dragon Breath / Outrage / Close Combat"
+        $ref: "#/components/schemas/Pokemon"
+      description: "[Lead, Switch, Closer]"
 ```
+
+##### Kolumny w raporcie
+
+| Kolumna | Format | Opis |
+|---------|--------|------|
+| Lead | Pokemon | Pierwszy w drużynie (najwyższy score) |
+| Switch | Pokemon | Drugi w drużynie (najlepszy switch) |
+| Closer | Pokemon | Trzeci w drużynie (zamyka grę) |
+| IV | float | IV% |
+| CP | int | Combat Power (bez cappowania — wyświetla oryginalne) |
+| Tier | string | Tier ligowy (GL/UL/ML) |
+| Score | float | Score ligowy (DevScore + cpEff + typeBonus) |
 
 ##### Diagram — Sekcja 3
 
@@ -1119,37 +1165,32 @@ TeamMember:
 start
 
 :Pokemon[] (z Kroku 2);
-:MetaRankingsData;
-:gamemaster.formats[] (konfiguracja lig);
-
-partition "Konfiguracja lig" {
-    :Wczytaj z gamemaster.formats[];
-    :Okresl CP limit per format;
-}
+:config.Global.PVP.LeagueCaps;
 
 fork
-    :Worker GL: CP <= 1500;
-    :Filtruj meta_tier S/A/B;
-    :Sortuj dev_score DESC;
-    :Generuj druzyny 3v3;
-    :Analiza coverage;
+    :GL: cp <= 1500, cp >= 1300;
+    :Filtruj tier rank < B;
+    :Punktuj: DevScore + cpEff + typeBonus;
+    :Greedy 3v3 (overlap penalty -20);
+    :Wykryj styl (ATK/DEF ratio);
 fork again
-    :Worker UL: 2000 <= CP <= 2500;
-    :Filtruj meta_tier S/A/B;
-    :Sortuj dev_score DESC;
-    :Generuj druzyny 3v3;
-    :Analiza coverage;
+    :UL: cp <= 2500, cp >= 2300;
+    :Filtruj tier rank < B;
+    :Punktuj: DevScore + cpEff + typeBonus;
+    :Greedy 3v3 (overlap penalty -20);
+    :Wykryj styl (ATK/DEF ratio);
 fork again
-    :Worker ML: brak limitu CP;
-    :Filtruj meta_tier S/A/B;
-    :Sortuj dev_score DESC;
-    :Generuj druzyny 3v3;
-    :Analiza coverage;
+    :ML: brak limitu;
+    :Filtruj tier rank < B;
+    :Punktuj: DevScore + cpEff + typeBonus;
+    :Greedy 3v3 (overlap penalty -20);
+    :Wykryj styl (ATK/DEF ratio);
 end fork
 
-:Polacz wyniki z wszystkich workerow;
+:Polacz wyniki z wszystkich lig;
 
-:Sekcja 3 Output;
+:Sekcja 3 Output
+(max 3 druzyny per liga);
 
 stop
 
@@ -1395,98 +1436,63 @@ stop
 
 ##### Co robimy?
 
-Generujemy listę Pokemon, których warto szukać w Lucky Trades. Listy **dynamiczne** — generowane z `gamemaster.json` + `meta_rankings.json`.
-
-##### Źródła danych (zamiast hardcoded)
-
-| List | Źródło | Jak wygenerować |
-|------|--------|-----------------|
-| **Priority 1: Legendary/Mythical** | `gamemaster.json` — `tags[]` contains `"legendary"` or `"mythical"` | Filter po tagach |
-| **Meta tier S/A** | `meta_rankings.json` — `rankings.raid_attackers` (top 10 = S, 10-19 = A) | Pozycja na liście |
-| **Priority 1 output** | ∩ (Legendary/Mythical) ∩ (Meta S-tier) | Przecięcie zbiorów |
-| **Priority 2: Shadow Meta** | `gamemaster.json` — `tags[]` contains `"shadoweligible"` + meta S/A tier | Filter po tagach + meta |
-| **Lucky check** | `collection` — `is_lucky == true` | Zbiór Lucky species |
-
-##### Normalizacja speciesId
-
-> **Problem:** `meta_rankings.json` używa `stunfisk_galarian`, `gamemaster.json` używa `galarian_stunfisk`.
-
-```
-normalizuj(speciesId):
-  # Zamień konwencję meta_rankings na gamemaster
-  # "stunfisk_galarian" → "galarian_stunfisk"
-  # "giratina_origin" → "giratina_origin" (bez zmian)
-  parts = split(speciesId, "_")
-  if parts[0] in ("galarian", "alolan", "hisuian", "paldean"):
-    return "_".join(parts[1:] + [parts[0]])
-  return speciesId
-```
+Generujemy **ranking scored** Pokemon, których warto szukać w Lucky Trades. Wynik zależy od meta rankingu raid attackerów i czy Pokemon jest legendarny/mythical.
 
 ##### Algorytm
 
 ```
-1. Zbuduj indeksy:
-   lucky_set = {p.species for p in collection if p.is_lucky}
-   meta_rankings = załaduj meta_rankings.json
-   meta_s = meta_rankings.raid_attackers[:10]   # top 10
-   meta_a = meta_rankings.raid_attackers[10:20] # 10-19
+1. Zbuduj indeks lucky:
+   ownedLucky = {speciesID → true} dla każdego lucky Pokemon w kolekcji
 
-2. Priorytet 1: Legendary/Mythical + Meta S-tier
-   candidates_1 = [
-     p for p in gamemaster
-     if ("legendary" in p.tags OR "mythical" in p.tags)
-     AND normalize(p.speciesId) in meta_s
-   ]
-   Dla każdego:
-     - Sprawdź: species in lucky_set?
-     - Output: ✅ MASZ Lucky / ❌ BRAK Lucky
+2. Zbuduj mapę meta score (z meta_rankings.json — Raid rankings):
+   - Pozycja 0-9 (top 10) → score 20 (tier S)
+   - Pozycja 10-19 → score 14 (tier A)
+   - Pozostałe → 0 (nie w rankingu)
 
-3. Priorytet 2: Shadow-eligible + Meta S/A-tier
-   candidates_2 = [
-     p for p in gamemaster
-     if "shadoweligible" in p.tags
-     AND normalize(p.speciesId) in (meta_s ∪ meta_a)
-   ]
-   Dla każdego:
-     - Sprawdź: masz Shadow? (collection)
-     - Sprawdź: masz Lucky? (lucky_set)
-     - Output: Polacz statusy
+3. Dla każdego gatunku z gamemaster:
+   - Pomiń shadow, untradeable
+   - Pomiń jeśli już masz Lucky (ownedLucky)
+   - isLegend = tags contains "legendary" lub "mythical"
+   - score = metaScore + bonusLegend
+     bonusLegend = 5 (jeśli legendary/mythical), 0 w przeciwnym razie
+   - reason = "{species} — Legendary, Meta S" / "{species} — Meta A" / ...
 
-4. Strategia (hardcoded — uniwersalne porady):
-   1. Handel to jedyny sposob na uzyskanie Lucky
-   2. Gwarantowany Lucky Trade przeznaczaj na legendy
-   3. Nie handluj HUNDO
-   4. Im starszy Pokemon, tym wyzszy szansa na Lucky
-   5. Candy XL z handlu zalezy od odleglosci łapania
+4. Sortuj: score DESC
 ```
 
-##### Struktury danych
+##### Struktura LuckyTarget
 
 ```yaml
-LuckyCandidate:
+LuckyTarget:
   type: object
   properties:
-    species:
-      type: string
     speciesId:
       type: string
+    species:
+      type: string
+    score:
+      type: number
+      format: float
+      description: "metaScore (0/14/20) + bonusLegend (0/5)"
+    isLegend:
+      type: boolean
+      description: "true jeśli legendary lub mythical"
+    hasLucky:
+      type: boolean
+      description: "true jeśli już masz Lucky (wykluczone z listy)"
     reason:
       type: string
-      example: "Dragon Ascent, Master League domination"
-    tags:
-      type: array
-      items:
-        type: string
-    meta_tier:
-      type: string
-      enum: [S, A]
-    have_lucky:
-      type: boolean
-    have_shadow:
-      type: boolean
-      nullable: true
-      description: "Tylko dla Priority 2"
+      example: "Rayquaza — Legendary, Meta S"
 ```
+
+##### Przykłady scoringu
+
+| Gatunek | Legendarny? | Meta Score | Bonus | Score | Reason |
+|---------|:----------:|:----------:|:-----:|------:|--------|
+| Rayquaza | Tak | 20 (S) | 5 | 25 | Rayquaza — Legendary, Meta S |
+| Ho-Oh | Tak | 14 (A) | 5 | 19 | Ho-Oh — Legendary, Meta A |
+| Metagross | Nie | 14 (A) | 0 | 14 | Metagross — Meta A |
+| Charizard | Nie | 0 | 0 | 0 | Charizard |
 
 ##### Diagram — Sekcja 5
 
@@ -1497,44 +1503,33 @@ LuckyCandidate:
 
 start
 
-:Zaladuj gamemaster.json
-+ meta_rankings.json;
+:Kolekcja (is_lucky → ownedLucky);
+:meta_rankings.json (raid rankings);
+:gamemaster.json (wszystkie gatunki);
 
-:Zbuduj lucky_set
-(zbiór gatunkow z is_lucky);
+partition "Budowa indeksow" {
+    :ownedLucky = Set(speciesID) z Lucky Pokemon;
+    :metaScore = Map(speciesID → score)
+    top 10 = 20pts, 10-19 = 14pts;
+}
 
-:Normalizuj speciesId
-(meta_rankings → gamemaster);
-
-partition "Priorytet 1: Legendary/Mythical + Meta S" {
-    :Filtruj gamemaster:
-    tags = legendary/mythical
-    AND speciesId in meta_s (top 10);
-    
-    while (Kolejny kandydat?) is (TAK)
-        :Sprawdz: species in lucky_set?;
-        if (Jest Lucky?) then (TAK)
-            :MASZ Lucky;
-        else (NIE)
-            :BRAK Lucky;
+partition "Petla per gatunek" {
+    while (Kolejny gatunek?) is (TAK)
+        if (Shadow / Untradeable?) then (TAK)
+            :Pomin;
         endif
+        if (Juz ma Lucky?) then (TAK)
+            :Pomin;
+        endif
+        :isLegend = legendary lub mythical;
+        :score = metaScore + bonusLegend (0/5);
+        :reason = opis;
     endwhile (NIE)
 }
 
-partition "Priorytet 2: Shadow-eligible + Meta S/A" {
-    :Filtruj gamemaster:
-    tags = shadoweligible
-    AND speciesId in meta_s ∪ meta_a;
-    
-    while (Kolejny kandydat?) is (TAK)
-        :Sprawdz: masz Shadow?;
-        :Sprawdz: masz Lucky?;
-        :Polacz statusy;
-    endwhile (NIE)
-}
+:Sortuj: score DESC;
 
-:Strategia Lucky Trade
-(hardcoded 5 porad);
+:LuckyTarget[] (ranking);
 
 stop
 
@@ -1669,11 +1664,12 @@ Rekomendacja: Max Moves (Dynamax)
 |-----------|---------|--------|
 | IV% | 15 | `min(IV% / 100 * 15, 15)` |
 | Lucky | 20 | +20 jeśli lucky (50% Stardust discount) |
-| Meta Tier | 20 | S=20, A=15, B=8, C=0 |
+| Meta Tier | 20 | S=20, A=15, B=8, C=0 (z kontekstowego tieru) |
 | Moveset | 15 | +5 per meta move (fast, ch1, ch2) |
-| Mega/Shadow potential | 10 | +5 mega S/A, +5 shadow S |
+| Mega/Shadow Potential | 10 | +5 Mega w Tier S/A (nie jest mega), +5 Shadow w Tier S (nie jest shadow/purified) |
 | CP Investment | 10 | `cp / max_cp_L50 * 10` |
-| Purpose bonus | 10 | Rajdy lub PvP=+8, Kolekcja=+3, Inne=0 |
+
+> **Uwaga:** Scoring nie uwzględnia Purpose — to kontekst (Raid/GL/UL/ML) determinuje tier.
 
 ##### Diagram — Sekcja 6
 
@@ -1791,10 +1787,9 @@ PO PETLI:
 | IV% | 15 | `min(IV% / 100 * 15, 15)` |
 | Lucky | 20 | +20 jeśli lucky (50% Stardust discount) |
 | Meta Tier | 20 | S=20, A=15, B=8, C=0 |
-| Moveset | 15 | +5 per meta move (fast, ch1, ch2); note: "Zmien na: {best_move}" |
+| Moveset | 15 | +5 per meta move (fast/ch1/ch2); note: "Zmien na: {best_move}" |
 | Mega/Shadow potential | 10 | +5 (Mega w Tier S/A, nie jest mega); +5 (Shadow w Tier S, nie jest shadow/purified) |
 | CP Investment | 10 | `cp / max_cp_L50 * 10` |
-| Purpose bonus | 10 | Rajdy lub PvP=+8, Kolekcja=+3, Inne=0 |
 
 ##### Diagram — PlantUML
 
@@ -1933,15 +1928,6 @@ repeat
         :CP Investment (0-10): cp / max_cp_L50 * 10;
         :Wynik += CP Investment;
 
-        ' === Purpose Bonus (0-10 pkt) ===
-        switch (Przeznaczenie)
-        case (Rajdy lub PvP)
-            :Wynik += 8;
-        case (Kolekcja)
-            :Wynik += 3;
-        case (Inne)
-        endswitch
-
         ' === Zabezpieczenie ===
         :Wynik = max(0, Wynik)
         (zakres: 0-100);
@@ -1985,7 +1971,16 @@ stop
 
 ##### Co robimy?
 
-Generujemy dwa pliki wyjściowe: JSON snapshot (dane surowe) i Markdown raport (7 sekcji z analizą). Brak post-processingu.
+Generujemy dwa pliki wyjściowe: JSON snapshot (dane surowe) i Markdown raport (7 sekcji z analizą). Raport jest generowany z **szablonu Go** (`templates/report.md.tmpl`) — edycja szablonu nie wymaga ponownej kompilacji.
+
+##### Szablon raportu
+
+Raport jest renderowany przez `text/template` z pliku `templates/report.md.tmpl`. Szablon zawiera:
+- Statyczny Markdown (nagłówki, tabele, struktura)
+- Dyrektywy `{{}}` z danymi dynamicznymi
+- 21 funkcji pomocniczych (inc, sub, pct, boolStr, tierOrDash, tierContext, rating, recommendation, formatTags, formatLucky, formatShadow, formatEmojis, purposeLabel, leagueScore, title, join, moveDPS, movesActual, movesBest, formatMoves, strOrDash)
+
+> **Zaleta:** Edycja formatu raportu = zmiana pliku `.tmpl` (bez kompilacji). Dane są przygotowywane w `buildReportData()`, szablon tylko renderuje.
 
 ##### Kolejność zapisu
 
@@ -2000,18 +1995,18 @@ Generujemy dwa pliki wyjściowe: JSON snapshot (dane surowe) i Markdown raport (
 
 | Plik | Wzorzec | Zawartość |
 |------|---------|-----------|
-| **JSON snapshot** | `analizy/collection-{konto}-YYYYMMDD.json` | Cała kolekcja (JSON array, indent=2) |
-| **Markdown report** | `analizy/Analiza-YYYYMMDD-opencode-{konto}.md` | 7 sekcji analizy |
+| **JSON snapshot** | `analizy/collection-{konto}-YYYYMMDD.json` | Cała kolekcja + metadane |
+| **Markdown report** | `analizy/Analiza-YYYYMMDD-opencode-{konto}.md` | 7 sekcji analizy (z szablonu) |
 
-##### JSON Snapshot
+##### JSON Snapshot — struktura
 
-```yaml
-CollectionSnapshot:
-  type: array
-  items:
-    $ref: "#/components/schemas/Pokemon"
-  description: "Cała kolekcja po wzbogaceniu (enrichment)"
-  format: "JSON array, indent=2, ensure_ascii=False"
+```json
+{
+  "konto": "Adzik",
+  "generated": "2026-09-23T10:15:00Z",
+  "count": 677,
+  "collection": [ ... ]
+}
 ```
 
 | Pole | Źródło |
@@ -2025,11 +2020,11 @@ CollectionSnapshot:
 | # | Nagłówek | Zawartość |
 |---|----------|-----------|
 | **1** | `## 1. Ogolne podsumowanie` | Statystyki kolekcji, TOP 10 HUNDO, TOP 10 wg CP, TOP 10 Dynamax, TOP 10 Shadow, TOP 10 Shiny, TOP 10 Power-Up, TOP 10 Dev Score, Meta vs Collection, uwagi ogólne |
-| **2** | `## 2. Zestawy do Rajdow` | Tier List (S/A/B/C) z Pokemon po filtrze purpose |
-| **3** | `## 3. Zestawy do PvP` | Great/Ultra/Master League, druzyny 3v3 (Lead/Switch/Closer) |
-| **4** | `## 4. Kandydaci do Transferu` | Bezpieczne (max 30) + NIE TRANSFERUJ (zasady) |
-| **5** | `## 5. Poszukiwani do statusu Lucky` | Priority 1/2 + Strategia |
-| **6** | `## 6. Szczegolowa analiza` | 6 podkategorii z oceną 1-10 |
+| **2** | `## 2. Zestawy do Rajdow` | Per-type counters (tabela: DPS, Optimal, MoveDPS, Moves) + Uniwersalny TOP 10 |
+| **3** | `## 3. Zestawy do PvP` | Great/Ultra/Master League, druzyny 3v3 (Lead/Switch/Closer) + podsumowanie PvP |
+| **4** | `## 4. Kandydaci do Transferu` | Bezpieczne (max 30) + Do Handlu + Ostrzeżenia + NIE TRANSFERUJ (zasady) |
+| **5** | `## 5. Poszukiwani do statusu Lucky` | LuckyTarget ranking (score) + Strategia |
+| **6** | `## 6. Szczegolowa analiza` | 6 podkategorii z oceną 1-10 (Legendary, HUNDO, Shadow, PvP, Shiny, Inne) |
 | **7** | `## 7. Wszystkie Pokemon-y` | Tabela Markdown (full ranking, wszystkie Pokemon) |
 
 ##### Szablon raportu Markdown
@@ -2108,27 +2103,19 @@ _Wykluczone: Pokemon z Purpose=PvP na GL cap (CP≥1450) oraz Pokemon na max CP.
 
 ---
 
-## 2. Zestawy do Rajdow — Tier List
+## 2. Zestawy do Rajdow — Zalecane Zespoly
 
-### Tier S
-- **{species}** — IV {iv_pct}%, CP {cp}, Moves: {fast}/{ch1}/{ch2}, Lucky: {lucky_star}
+### vs Fire-type
+
+| # | UID | Pokemon | ATK | DPS | Optimal | MoveDPS | Moves (actual) | Moves (best) | IV | CP |
+|--:|-----|---------|----:|----:|--------:|--------:|----------------|--------------|---:|---:|
+| 1 | {uid} | **{species}** | {atk:.0f} | {dps:.1f} | {optimal:.1f} | {fast:.1f}/{charged:.1f} | {fast_move}/{charged_move} | {best_fast}/{best_charged} | {iv:.1f}% | {cp} |
+
+### vs Water-type
 ...
 
-### Tier A
+### Uniwersalny (wszystkie typy)
 ...
-
-### Tier B
-...
-
-### Tier C
-...
-
-### Priorytet inwestycji
-1. {investment_1}
-2. {investment_2}
-3. {investment_3}
-4. {investment_4}
-5. {investment_5}
 
 ---
 
@@ -2136,12 +2123,12 @@ _Wykluczone: Pokemon z Purpose=PvP na GL cap (CP≥1450) oraz Pokemon na max CP.
 
 ### Great League (1500 CP)
 
-**Druzyna A:**
-- **Lead:** {species} — IV {iv_pct}%, CP {cp}
-- **Switch:** {species} — IV {iv_pct}%, CP {cp}
-- **Closer:** {species} — IV {iv_pct}%, CP {cp}
+**Druzyna A (balanced):**
+- **Lead:** {species} — IV {iv}%, CP {cp}, Tier {tier}, Score {score}
+- **Switch:** {species} — IV {iv}%, CP {cp}, Tier {tier}, Score {score}
+- **Closer:** {species} — IV {iv}%, CP {cp}, Tier {tier}, Score {score}
 
-**Druzyna B:**
+**Druzyna B (aggressive):**
 - **Lead:** ...
 - **Switch:** ...
 - **Closer:** ...
@@ -2160,8 +2147,11 @@ _Wykluczone: Pokemon z Purpose=PvP na GL cap (CP≥1450) oraz Pokemon na max CP.
 - **Switch:** ...
 - **Closer:** ...
 
-### Kluczowe Pokemon
-- {species1}
+### Podsumowanie PvP — wszystkie ligi
+
+| Pokemon | CP | IV% | GL Tier | UL Tier | ML Tier | DevScore |
+|---------|---:|----:|:-------:|:-------:|:-------:|---------:|
+| **{species}** | {cp} | {iv}% | {gl_tier} | {ul_tier} | {ml_tier} | {score} |
 - {species2}
 - ...
 
@@ -2191,15 +2181,8 @@ Kryteria: IV < 90%, nie shiny, nie lucky, nie shadow, nie hundo, nie tier S, nie
 
 ## 5. Poszukiwani do statusu Lucky — Priorytety Lucky Trades
 
-### Priorytet 1: Legendary / Mythical (Meta S-tier)
-- **{species}** — {reason} — ✅ MASZ Lucky
-- **{species}** — {reason} — ❌ BRAK Lucky
-... (dynamicznie z gamemaster + meta_rankings)
-
-### Priorytet 2: Shadow-eligible Meta
-- **{species}** — Masz Shadow | ✅ Masz Lucky
-- **{species}** — Brak
-... (dynamicznie z gamemaster + meta_rankings)
+- **{reason}** (score {score}) — MASZ Lucky / BRAK Lucky
+... (ranking scored z gamemaster + meta_rankings)
 
 ### Strategia Lucky Trade
 1. Handel to jedyny sposob na uzyskanie Lucky — im wiecej handlujesz, tym wyzszy rate
@@ -2213,36 +2196,36 @@ Kryteria: IV < 90%, nie shiny, nie lucky, nie shadow, nie hundo, nie tier S, nie
 ## 6. Szczegolowa analiza — Ocena 1-10
 
 ### Legendary / Mythical
-- **{species}** — Ocena: {ocena}/10, IV {iv_pct}%, Lucky: {lucky}, CP {cp}, Zastosowanie: {purpose}, Rekomendacja: {rekomendacja}
+- **{species}** — R:{raid} GL:{gl} UL:{ul} ML:{ml} | Ocena: {ocena}/10, IV {iv}%, Lucky: {lucky}, Rekomendacja: {rekomendacja}
 ...
 
 ### HUNDO
-- **{species}** — CP {cp}, Lucky: {lucky}, Shadow: {shadow}, Rekomendacja: MAX OUT (L50)
+- **{species}** — CP {cp}, Lucky: {lucky}, Shadow: {shadow}, RaidTier: {tier}, Rekomendacja: MAX OUT (L50)
 ...
 
 ### Shadow — Frustration → Return
-- **{species}** — IV {iv_pct}%, Lucky: {lucky}, Frustration removable: {frustration}, Rekomendacja: {rekomendacja}
+- **{species}** — IV {iv}%, Lucky: {lucky}, R:{raid} GL:{gl} UL:{ul} ML:{ml}, Ocena: {ocena}/10, Rekomendacja: {rekomendacja}
 ...
 
 ### PvP Relevant
-- **{species}** — IV {iv_pct}%, CP {cp}, Lucky: {lucky}, Moves: {fast}/{ch1}/{ch2}, Rekomendacja: {rekomendacja}
+- **{species}** — IV {iv}%, CP {cp}, Lucky: {lucky}, R:{raid} GL:{gl} UL:{ul} ML:{ml}, Moves: {fast}/{ch1}/{ch2}, Ocena: {ocena}/10
 ... (TOP 30)
 
 ### Shiny
-- **{species}** — IV {iv_pct}%, Lucky: {lucky} ⭐ META, Rekomendacja: {rekomendacja}
+- **{species}** — IV {iv}%, Lucky: {lucky} [META], R:{raid} GL:{gl} UL:{ul} ML:{ml}, Ocena: {ocena}/10, Rekomendacja: {rekomendacja}
 ...
 
 ### Inne (Dynamax / Purified / Traded)
-- **{species}** — IV {iv_pct}%, Tags: {tags}, Rekomendacja: {rekomendacja}
+- **{species}** — IV {iv}%, Tags: {tags}, R:{raid} GL:{gl} UL:{ul} ML:{ml}, Ocena: {ocena}/10, Rekomendacja: {rekomendacja}
 ...
 
 ---
 
 ## 7. Wszystkie Pokemon-y — Ranking Rozwoju ({total} sztuk)
 
-| # | UID | Pokemon | Score | IV% | Lucky | Shadow | Tier | CP | PvP Liga | Fast / Charged 1 / Charged 2 | Przeznaczenie |
-|---|-----|---------|------:|----:|:-----:|:------:|:----:|---:|:---------|:-----------------------------|:-------------|
-| 1 | {uid} | **{species}** {emoji} | {score:.1f} | {iv_pct:.1f}% | {lucky} | {shadow} | {tier} | {cp:>4} | {league} | {fast} / {ch1} / {ch2} | {purpose} |
+| # | UID | Pokemon | Score | IV% | Lucky | Shadow | Tier | CP | Liga | Moves | Przeznaczenie |
+|--:|-----|---------|------:|----:|:-----:|:------:|:----:|---:|:-----|:------|:-------------|
+| 1 | {uid} | **{species}** {emoji} | {score:.1f} | {iv:.1f}% | {lucky} | {shadow} | {tier} | {cp} | - | {fast}/{ch1}/{ch2} | {purpose} |
 | 2 | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... |
 ```
 
@@ -2264,7 +2247,7 @@ Kryteria: IV < 90%, nie shiny, nie lucky, nie shadow, nie hundo, nie tier S, nie
 ##### Sekcja 7 — Tabela Markdown
 
 ```
-Header: # | UID | Pokemon | Score | IV% | Lucky | Shadow | Tier | CP | PvP Liga | Fast / Charged 1 / Charged 2 | Przeznaczenie
+Header: # | UID | Pokemon | Score | IV% | Lucky | Shadow | Tier | CP | Liga | Moves | Przeznaczenie
 ```
 
 | Kolumna | Format | Opis |
@@ -2276,9 +2259,9 @@ Header: # | UID | Pokemon | Score | IV% | Lucky | Shadow | Tier | CP | PvP Liga 
 | IV% | `float` | Procent IV |
 | Lucky | `✅/❌` | Czy jest Lucky |
 | Shadow | `👻` | Czy jest Shadow |
-| Tier | `S/A/B/C` | Meta tier |
+| Tier | `S/A+/A/B+/B/C/D` | Meta tier |
 | CP | `int` | Combat Power |
-| PvP Liga | `string` | Status ligi (GL/UL/ML) |
+| Liga | `-` | Zarezerwowane (puste) |
 | Moves | `string` | fast / ch1 / ch2 |
 | Przeznaczenie | `string` | Purpose |
 

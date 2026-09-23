@@ -46,19 +46,37 @@
 | `is_hundo` | bool | `IVPct == 100.0` |
 | `species_id` | string | Znormalizowany ID z gamemaster |
 | `base_stats` | BaseStats | Bazowe atk/def/hp z gamemaster |
-| `meta_tier` | string | S/A/B/C z meta_rankings |
+| `types` | []string | Typy z gamemaster (np. `["dragon", "ground"]`) |
+| `fast_moves` | []string | Dostępne szybkie ruchy z gamemaster |
+| `charged_moves` | []string | Dostępne charged ruchy z gamemaster |
 | `family_id` | string | ID rodziny ewolucyjnej |
-| `dev_score` | float64 | Score rozwoju 0-100 (IV, Lucky, Meta, Moves, Mega/Shadow, CP, Purpose) |
+| `tags` | []string | Dodatkowe tagi (z kol T ODS) |
 | `max_cp` | int | Max CP na lvl 50 z IV 15/15/15 (`CalculateMaxCP`) |
-| `effective_atk` | float64 | Efektywny ATK: `(BaseAtk + IVAtk) * CPM_L40 * ShadowBonus` |
-| `move_dps_fast` | float64 | Surowy DPS szybkiego ruchu: `Power / Duration` |
-| `move_dps_charged` | float64 | Surowy DPS charged ruchu: `Power / TimeToCharge` |
-| `raid_dps` | float64 | DPS z bieżącymi ruchami (przeciwko Tier 5 boss, DEF=162.3) |
-| `raid_dps_optimal` | float64 | DPS z optymalnymi ruchami |
+| **Per-context meta tiers** | | |
 | `raid_tier` | string | Tier raidowy (S/A+/A/B+/B/C/D) |
 | `gl_tier` | string | Tier Great League |
 | `ul_tier` | string | Tier Ultra League |
 | `ml_tier` | string | Tier Master League |
+| **Per-context ranking positions** | | |
+| `raid_rank` | int | Pozycja w rankingu raid (0-indexed, -1 = brak) |
+| `gl_rank` | int | Pozycja w rankingu GL |
+| `ul_rank` | int | Pozycja w rankingu UL |
+| `ml_rank` | int | Pozycja w rankingu ML |
+| **Per-context scores** | | |
+| `raid_score` | float64 | Score raidowy (0-100) |
+| `gl_score` | float64 | Score GL (0-100) |
+| `ul_score` | float64 | Score UL (0-100) |
+| `ml_score` | float64 | Score ML (0-100) |
+| **DevScore** | | |
+| `dev_score` | float64 | Score rozwoju 0-100 (kontekstowy: najlepszy tier z Purpose) |
+| **Attack stats** | | |
+| `effective_atk` | float64 | Efektywny ATK: `(BaseAtk + IVAtk) * CPM(40) * ShadowBonus` |
+| **Raid DPS** | | |
+| `raid_dps` | float64 | DPS z bieżącymi ruchami (vs Tier 5 boss, DEF=162.3) |
+| `raid_dps_optimal` | float64 | DPS z optymalnymi ruchami |
+| **Move DPS (pure)** | | |
+| `move_dps_fast` | float64 | Surowy DPS szybkiego ruchu: `Power / Duration` |
+| `move_dps_charged` | float64 | Surowy DPS charged ruchu: `Power / TimeToCharge` |
 
 ---
 
@@ -113,26 +131,25 @@
 
 ## Internal Pokemon Dict (Enriched)
 
-Po fazie Enrichment, każdy pokemon to dict z polami:
+Po fazie Enrichment, każdy Pokemon to dict z polami:
 
 | Internal Key | Źródło | Typ | Opis |
 |-------------|--------|-----|------|
 | `uid` | ODS A | string | `P-XXXXX` |
 | `species` | ODS B (norm.) | string | Nazwa znormalizowana |
 | `nick` | ODS C | string | Nazwa własna |
-| `cp` | ODS F | int/None | Obecne CP |
-| `iv_a`, `iv_d`, `iv_h` | ODS G,H,I | int/None | IVs |
+| `type1` | ODS D | string | Typ 1 (z Pokedex) |
+| `type2` | ODS E | string | Typ 2 (z Pokedex) |
+| `cp` | ODS F | int | Obecne CP |
+| `iv_atk`, `iv_def`, `iv_hp` | ODS G,H,I | int | IVs |
 | `iv_pct` | Computed | float | `(Atk+Def+HP)/45*100` |
-| `fast` | ODS K | string | Fast move name |
-| `ch1` | ODS L | string | Charged 1 name |
-| `ch2` | ODS M | string | Charged 2 name |
+| `fast_move` | ODS K | string | Fast move name |
+| `charged1` | ODS L | string | Charged 1 name |
+| `charged2` | ODS M | string | Charged 2 name |
 | `purpose` | ODS V | string | Przeznaczenie |
-| `goal` | ODS Y | string | Cel rozwoju |
 | `decision` | ODS X | string | Decyzja |
-| `priority` | ODS W | string | Priorytet |
-| `reason` | ODS Z | string | Powód |
 | `notes` | ODS AA | string | Uwagi |
-| `tags` | ODS T + N-S | string | Wszystkie tagi |
+| `tags` | ODS T + computed | []string | Wszystkie tagi |
 | `is_shiny` | Computed | bool | 'Shiny' in tags |
 | `is_lucky` | Computed | bool | 'Lucky' in tags |
 | `is_shadow` | Computed | bool | 'Shadow' in tags |
@@ -140,17 +157,31 @@ Po fazie Enrichment, każdy pokemon to dict z polami:
 | `is_dynamax` | Computed | bool | 'Dynamax' in tags |
 | `is_traded` | Computed | bool | 'Traded' in tags |
 | `is_hundo` | Computed | bool | `iv_pct == 100.0` |
-| `species_id` | Mapped | string | z `name_to_species` |
-| `base_stats` | Gamemaster | Dict | `{atk, def, hp}` |
-| `types` | Gamemaster | List[str] | `['fire', 'flying']` |
-| `fast_list` | Gamemaster | List[str] | Fast move names |
-| `charged_list` | Gamemaster | List[str] | Charged move names |
-| `meta_tier` | Computed | str | 'S'/'A'/'B'/'C' |
-| `max_safe_gl` | Computed | float | Max level dla CP ≤ 1500 |
-| `max_safe_ul` | Computed | float | Max level dla CP ≤ 2500 |
-| `target_league` | Computed | str | 'GL'/'UL'/'ML'/'AUTO' |
-| `current_level` | Computed | float | Szacunkowy poziom |
-| `dev_score` | Computed | float | Score 0-100 |
+| `species_id` | Gamemaster | string | Z `name_to_species` |
+| `base_stats` | Gamemaster | BaseStats | `{atk, def, hp}` |
+| `types` | Gamemaster | []string | `['fire', 'flying']` |
+| `fast_moves` | Gamemaster | []string | Dostępne fast moves |
+| `charged_moves` | Gamemaster | []string | Dostępne charged moves |
+| `family_id` | Gamemaster | string | ID rodziny |
+| `max_cp` | Computed | int | Max CP na L50 (15/15/15) |
+| `raid_tier` | Meta | string | Tier raidowy (S/A+/A/B+/B/C/D) |
+| `gl_tier` | Meta | string | Tier GL |
+| `ul_tier` | Meta | string | Tier UL |
+| `ml_tier` | Meta | string | Tier ML |
+| `raid_rank` | Meta | int | Pozycja w rankingu raid |
+| `gl_rank` | Meta | int | Pozycja w rankingu GL |
+| `ul_rank` | Meta | int | Pozycja w rankingu UL |
+| `ml_rank` | Meta | int | Pozycja w rankingu ML |
+| `raid_score` | Computed | float | Score raid (0-100) |
+| `gl_score` | Computed | float | Score GL (0-100) |
+| `ul_score` | Computed | float | Score UL (0-100) |
+| `ml_score` | Computed | float | Score ML (0-100) |
+| `dev_score` | Computed | float | Score rozwoju 0-100 |
+| `effective_atk` | Computed | float | (BaseAtk+IVAtk)*CPM(40)*Shadow |
+| `raid_dps` | Computed | float | DPS z bieżącymi ruchami |
+| `raid_dps_optimal` | Computed | float | DPS z optymalnymi ruchami |
+| `move_dps_fast` | Computed | float | Surowy DPS fast move |
+| `move_dps_charged` | Computed | float | Surowy DPS charged move |
 
 ---
 
@@ -158,54 +189,179 @@ Po fazie Enrichment, każdy pokemon to dict z polami:
 
 ```json
 {
-  "metadata": {
-    "account": "{konto}",
-    "generated_at": "2026-09-06T10:15:00",
-    "total_pokemon": 670,
-    "gamemaster_version": "2026-09-06"
-  },
-  "pokemon": [
+  "konto": "Adzik",
+  "generated": "2026-09-23T10:15:00Z",
+  "count": 677,
+  "collection": [
     {
-      "uid": "P-00146",
-      "species": "Gyarados",
-      "nick": "",
-      "cp": 2496,
-      "iv_a": 14,
-      "iv_d": 13,
-      "iv_h": 15,
-      "iv_pct": 91.1,
-      "fast": "Bite",
-      "ch1": "Crunch",
-      "ch2": "Hydro Pump",
-      "purpose": "PvP",
-      "goal": "",
-      "decision": "",
-      "priority": "",
-      "reason": "",
-      "notes": "",
-      "tags": "Lucky, Traded, Ultra League",
-      "is_shiny": false,
-      "is_lucky": true,
-      "is_shadow": false,
-      "is_purified": false,
-      "is_dynamax": false,
-      "is_traded": true,
-      "is_hundo": false,
-      "species_id": "gyarados",
-      "base_stats": {"atk": 237, "def": 197, "hp": 216},
-      "types": ["water", "flying"],
-      "fast_list": ["Bite", "Dragon Breath", "Waterfall"],
-      "charged_list": ["Crunch", "Hydro Pump", "Outrage", "Aqua Tail"],
-      "meta_tier": "A",
-      "max_safe_gl": 0,
-      "max_safe_ul": 29.5,
-      "target_league": "UL",
-      "current_level": 29.5,
-      "dev_score": 86.2
+      "UID": "P-00146",
+      "Species": "Gyarados",
+      "Nick": "",
+      "Type1": "water",
+      "Type2": "flying",
+      "CP": 2496,
+      "IVAtk": 14,
+      "IVDef": 13,
+      "IVHP": 15,
+      "FastMove": "Bite",
+      "Charged1": "Crunch",
+      "Charged2": "Hydro Pump",
+      "Date": "2024-01-15",
+      "Purpose": "PvP",
+      "Decision": "",
+      "Notes": "",
+      "IVPct": 91.1,
+      "IsLucky": true,
+      "IsShiny": false,
+      "IsShadow": false,
+      "IsPurified": false,
+      "IsDynamax": false,
+      "IsTraded": true,
+      "IsHundo": false,
+      "SpeciesID": "gyarados",
+      "BaseStats": {"Atk": 237, "Def": 197, "HP": 216},
+      "Types": ["water", "flying"],
+      "FastMoves": ["bite", "dragon_tail", "waterfall"],
+      "ChargedMoves": ["crunch", "hydro_pump", "outrage", "aqua_tail"],
+      "FamilyID": "FAMILY_GYARADOS",
+      "Tags": ["lucky", "traded"],
+      "MaxCP": 3554,
+      "RaidTier": "A",
+      "GLTier": "A+",
+      "ULTier": "S",
+      "MLTier": "A",
+      "RaidRank": 15,
+      "GLRank": 25,
+      "ULRank": 5,
+      "MLRank": 20,
+      "RaidScore": 62.5,
+      "GLScore": 58.3,
+      "ULScore": 72.1,
+      "MLScore": 55.0,
+      "DevScore": 86.2,
+      "EffectiveATK": 245.3,
+      "RaidDPS": 15.2,
+      "RaidDPSOptimal": 18.7,
+      "MoveDPSFast": 12.5,
+      "MoveDPSCharged": 22.1
     }
   ]
 }
 ```
+
+> Struktura JSON odpowiada `model.Pokemon` (Go struct). Pola z大写字母 = exported Go fields.
+
+---
+
+## Config Global — `config.Global`
+
+> Ładowany z `data/config.json` przez `config.Load(projectRoot)`. Domyślne wartości z `config.Default()`.
+
+| Sekcja | Typ | Pola | Opis |
+|--------|-----|------|------|
+| `urls` | URLsConfig | `gamemaster`, `rankings` (map) | URL-e do pobierania danych z PvPoke |
+| `paths` | PathsConfig | `data`, `backups`, `analizy` | Ścieżki do katalogów |
+| `cache` | CacheConfig | `max_age_days`, `max_backups` | Cache i backupy |
+| `raids` | RaidsConfig | `min_cp`, `boss_defense_ref`, `se_multiplier`, `nve_multiplier`, `shadow_atk_bonus` | Parametry raidowe |
+| `tiers` | TiersConfig | `S`, `A+`, `A`, `B+`, `B`, `C` | Progi tierów (pozycje w rankingu) |
+| `meta_tiers` | MetaTiersConfig | `S`, `A`, `B` | Progi meta tierów (pozycje) |
+| `scoring` | ScoringConfig | `iv_max`, `lucky_pts`, `move_pts`, `cp_max_pts`, `score_max`, `iv_weight`, `mega_pts` | Parametry scoringu |
+| `report` | ReportConfig | `model_name`, `max_move_display`, `max_pvp_entries`, `max_transfer_candidates`, `max_team_size` | Parametry raportu |
+| `pvp` | PVPConfig | `league_caps` (map: GL/UL/ML → CP) | CP-limity lig |
+| `meta` | MetaConfig | `top_n` | Ile Pokemon w rankingu meta (domyślnie 20) |
+
+### Przykładowy `data/config.json`
+
+```json
+{
+  "urls": {
+    "gamemaster": "https://raw.githubusercontent.com/pvpoke/.../gamemaster.json",
+    "rankings": {
+      "great_league_overall": "https://.../rankings-1500.json",
+      "ultra_league_overall": "https://.../rankings-2500.json",
+      "master_league_overall": "https://.../rankings-10000.json",
+      "raid_attackers": "https://.../rankings-10000.json"
+    }
+  },
+  "paths": { "data": "data", "backups": "backups", "analizy": "analizy" },
+  "cache": { "max_age_days": 30, "max_backups": 5 },
+  "raids": {
+    "min_cp": 1000,
+    "boss_defense_ref": 162.3,
+    "se_multiplier": 1.6,
+    "nve_multiplier": 0.625,
+    "shadow_atk_bonus": 1.2
+  },
+  "tiers": { "S": 20, "A+": 50, "A": 100, "B+": 150, "B": 200, "C": 250 },
+  "meta_tiers": { "S": 10, "A": 20, "B": 30 },
+  "scoring": {
+    "iv_max": 15, "lucky_pts": 20, "move_pts": 5,
+    "cp_max_pts": 10, "score_max": 100, "iv_weight": 100, "mega_pts": 5
+  },
+  "report": {
+    "model_name": "opencode",
+    "max_move_display": 25, "max_pvp_entries": 30,
+    "max_transfer_candidates": 30, "max_team_size": 3
+  },
+  "pvp": { "league_caps": { "GL": 1500, "UL": 2500, "ML": 0 } },
+  "meta": { "top_n": 20 }
+}
+```
+
+---
+
+## Wzór Scoringu — `dev_score` (0-100)
+
+> Obliczany przez `CalculateContextScore()` lub `CalculateDevScore()`.
+
+| Komponent | Max pkt | Wzór | Źródło config |
+|-----------|---------|------|----------------|
+| IV% | 15 | `min(IV% / 100 * iv_weight, iv_max)` | `scoring.iv_max`, `scoring.iv_weight` |
+| Lucky | 20 | `+lucky_pts jeśli IsLucky` | `scoring.lucky_pts` |
+| Meta Tier | 20 | S=20, A=15, B=8, C=0 | `TierToScore(tier)` |
+| Moveset | 15 | `+move_pts per meta move (fast/ch1/ch2)` | `scoring.move_pts` |
+| Mega/Shadow | 10 | `+mega_pts jeśli species zawiera "_mega"` | `scoring.mega_pts` |
+| CP Investment | 10 | `min(cp / max_cp_L50 * cp_max_pts, cp_max_pts)` | `scoring.cp_max_pts` |
+
+**Suma max:** 15 + 20 + 20 + 15 + 5 + 10 = **85** (z limitem `score_max = 100`)
+
+> `CalculateDevScore()` dodatkowo uwzględnia Purpose: Transfer/Kolekcja → score = 0.
+
+---
+
+## Wzór Raid DPS
+
+> Obliczany przez `CalculateMoveDPS()` i `CalculatePokemonDPS()`.
+
+```
+Damage = 0.5 × Power × (ATK / DEF) × STAB × Effectiveness
+
+Gdzie:
+  ATK = (BaseAtk + IVAtk) × GetCPM(40) × ShadowBonus
+  DEF = BossDefenseRef = 162.3 (config.Global.Raids.BossDefenseRef)
+  STAB = 1.2 (jeśli typ ruchu = typ Pokemon, inaczej 1.0)
+  Effectiveness = 1.6 (super-effective) lub 1.0 (neutralny)
+  ShadowBonus = 1.2 (config.Global.Raids.ShadowATKBonus)
+  GetCPM(40) = 0.7903 (CPM level 40 z oficjalnej tabeli CPM)
+```
+
+### DPS z bieżącymi ruchami
+
+```
+fastDPS = (0.5 × fastPower × atkDefRatio) / (fastCD / 1000)
+chargedDPSContrib = (0.5 × chargedPower × atkDefRatio) / timeToCharge
+timeToCharge = (chargedEnergy / fastEnergy) × (fastCD / 1000)
+DPS = (fastDPS + chargedDPSContrib) × STAB × Effectiveness
+```
+
+### Surowy DPS ruchu (bez statystyk Pokemon)
+
+```
+fastDPS = fastPower / (fastCD / 1000)
+chargedDPS = chargedPower / timeToCharge
+```
+
+> `CalculateMoveDPSRaw()` zwraca te wartości — wyświetlane w raporcie jako "MoveDPS".
 
 ---
 
@@ -213,13 +369,13 @@ Po fazie Enrichment, każdy pokemon to dict z polami:
 
 | Sekcja | Źródło Danych | Kluczowe Pola |
 |--------|--------------|---------------|
-| 1. Podsumowanie | `enriched_pokemon[]` | `len()`, `sum(is_shiny)`, `sum(is_lucky)`, `sum(is_hundo)`, `Counter(purpose)`, `sorted(iv_pct)`, `sorted(cp)` |
-| 2. Rajdy | `enriched_pokemon[]` | `meta_tier`, `cp`, `iv_pct`, `is_lucky`, `fast`, `ch1`, `ch2` |
-| 3. PvP | `enriched_pokemon[]` | `cp`, `meta_tier`, `iv_pct`, `is_lucky`, `max_safe_gl`, `max_safe_ul`, `target_league` |
-| 4. Transfer | `enriched_pokemon[]` | `iv_pct`, `is_shiny`, `is_lucky`, `is_shadow`, `is_hundo`, `meta_tier`, `purpose` |
-| 5. Lucky Trade | `enriched_pokemon[]` | `is_lucky`, `meta_tier`, `species`, `species_id`, `is_shadow` |
-| 6. Szczegółowa | `enriched_pokemon[]` | Wszystkie pola wg kategorii |
-| 7. Ranking | `enriched_pokemon[]` | `dev_score`, `iv_pct`, `is_lucky`, `is_shadow`, `meta_tier`, `cp`, `current_level`, `max_safe_gl/ul`, `target_league`, `fast`, `ch1`, `ch2`, `purpose` |
+| 1. Podsumowanie | `collection[]` | `len()`, `sum(IsShiny)`, `sum(IsLucky)`, `sum(IsHundo)`, `Counter(Purpose)` |
+| 2. Rajdy | `collection[]` + `moveMap` | `EffectiveATK`, `RaidDPS`, `RaidDPSOptimal`, `MoveDPSFast`, `MoveDPSCharged` |
+| 3. PvP | `collection[]` + `config.PVP.LeagueCaps` | `CP`, `GLTier/ULTier/MLTier`, `GLScore/ULScore/MLScore`, `DevScore` |
+| 4. Transfer | `collection[]` + `gamemaster` | `IVPct`, `IsShiny`, `IsLucky`, `IsShadow`, `IsHundo`, `RaidTier`, `Purpose` |
+| 5. Lucky Trade | `collection[]` + `gamemaster` + `metaData` | `IsLucky`, `SpeciesID`, `RaidScore` |
+| 6. Szczegółowa | `collection[]` | Wszystkie pola wg kategorii (Legendary, HUNDO, Shadow, PvP, Shiny, Inne) |
+| 7. Ranking | `collection[]` | `DevScore`, `IVPct`, `IsLucky`, `IsShadow`, `RaidTier/GLTier/ULTier/MLTier`, `CP`, `FastMove/Charged1/Charged2`, `Purpose` |
 
 ---
 
@@ -238,14 +394,14 @@ rectangle "Source" {
 
 rectangle "ETL" {
     [Load] as Load
-    [Enrich\n+20 pól] as Enrich
-    [Score\n7 komponentów] as Score
-    [League Cap\n+ Target League] as Label
+    [Enrich\n+25 pól] as Enrich
+    [Score\n6 komponentów] as Score
+    [Per-Context\nTiers + Ranks] as Tiers
     [Sort DESC] as Sort
 }
 
 rectangle "Outputs" {
-    [Report.md\n7 sekcji] as MD
+    [Report.md\n7 sekcji\n(z szablonu)] as MD
     [Collection.json\nSnapshot] as JSON
 }
 
@@ -254,8 +410,8 @@ GM --> Load
 MR --> Load
 Load --> Enrich
 Enrich --> Score
-Score --> Label
-Label --> Sort
+Score --> Tiers
+Tiers --> Sort
 Sort --> MD
 Sort --> JSON
 
@@ -268,16 +424,17 @@ Sort --> JSON
 
 | Rule ID | Źródło | Cel | Transformacja |
 |---------|--------|-----|--------------|
-| R01 | ODS B (Gatunek) | Internal `species` | `normalize_name()` → `'(Forma)' → ' - Forma'` |
-| R02 | ODS N-S (checkboxes) | `is_shiny`...`is_traded` | `bool = 'X' in cell` |
-| R03 | ODS G,H,I | `iv_pct` | `(G+H+I)/45*100` z precyzją 0.1% |
-| R04 | ODS B + Gamemaster | `species_id` | `normalize(ODS_B)` → lookup w `name_to_species` |
-| R05 | ODS V + Y + Tags | `target_league` | Priority: `goal` > `purpose` > `tags` > AUTO |
-| R06 | `cp` + `base_stats` + CPM | `current_level` | Binary search po CPM table (precyzja 0.5 lvl) |
-| R07 | `base_stats` + `ivs` + CPM table | `max_safe_gl/ul` | Binary search: max level gdzie CP ≤ cap |
-| R08 | `species_id` + `_META_TIER_S/A/B` | `meta_tier` | Check: species_id, species_id_shadow, species_id_mega, base |
-| R09 | `species_id` + `_META_TIER_S/A` | Mega/Shadow bonus | Check: base_mega w S/A, base_shadow w S |
-| R10 | `base_stats` + CPM table | `max_cp_40`, `max_cp_50` | `max_cp(atk+15, def+15, hp+15, CPM_40/50)` |
+| R01 | ODS B (Gatunek) | Internal `Species` | `NormalizeName()` → `'(Forma)' → ' - Forma'` |
+| R02 | ODS N-S (checkboxy) | `IsShiny`...`IsTraded` | `bool = 'X' in cell` |
+| R03 | ODS G,H,I | `IVPct` | `(Atk+Def+HP)/45*100` z precyzją 0.1% |
+| R04 | ODS B + Gamemaster | `SpeciesID` | `ResolveSpecies()` → lookup w `nameToSpecies` |
+| R05 | Gamemaster + Meta | `RaidTier/GLTier/ULTier/MLTier` | `BuildMetaTiers()` — pozycja w rankingu → tier (S/A+/A/B+/B/C/D) |
+| R06 | Gamemaster + Meta | `RaidRank/GLRank/ULRank/MLRank` | Pozycja w rankingu (0-indexed, -1 = brak) |
+| R07 | `BaseStats` + `IVs` + CPM | `MaxCP` | `CalculateMaxCP()` — CP na L50 z IV 15/15/15 |
+| R08 | `BaseStats` + `IVs` + CPM | `EffectiveATK` | `(BaseAtk+IVAtk) * GetCPM(40) * ShadowBonus` |
+| R09 | `MoveMap` + `Pokemon` | `MoveDPSFast/MoveDPSCharged` | `CalculateMoveDPSRaw()` — surowy DPS ruchu |
+| R10 | `Collection` + `MoveMap` | `RaidDPS/RaidDPSOptimal` | `CalculatePokemonDPS()` / `FindOptimalMoves()` |
+| R11 | `Collection` + `Gamemaster` + `Meta` | `DevScore/GLScore/ULScore/MLScore` | `CalculateDevScore()` / `CalculateContextScore()` — 6 komponentów |
 
 ---
 
@@ -289,7 +446,5 @@ Sort --> JSON
 | No Data Loss | `len(enriched) == len(ods_rows)` | Lost rows |
 | IV% Range | `0 <= iv_pct <= 100` | Invalid IV |
 | CP Range | `cp >= 0` | Negative CP |
-| Level Range | `1 <= current_level <= 50` | Invalid level |
-| Max Safe Level | `max_safe_gl <= max_safe_ul` | Logic error |
-| Score Range | `0 <= dev_score <= 100` | Scoring bug |
-| League Status | Non-empty string | Missing logic |
+| Score Range | `0 <= score <= 100` | Scoring bug |
+| Tier Values | tier in `["S","A+","A","B+","B","C","D",""]` | Invalid tier |

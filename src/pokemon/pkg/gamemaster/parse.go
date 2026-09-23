@@ -85,18 +85,20 @@ func ParseCollection(sheet *ods.Sheet, gmMap map[string]*model.GamemasterPokemon
 		speciesNorm := ResolveSpecies(species, gmMap)
 		gmPokemon, _ := gmMap[speciesNorm]
 
-		familyID := ""
-		var baseStats model.BaseStats
-		if gmPokemon != nil {
-			baseStats = model.BaseStats{
-				Atk: gmPokemon.BaseStats.Atk,
-				Def: gmPokemon.BaseStats.Def,
-				HP:  gmPokemon.BaseStats.HP,
-			}
-			if gmPokemon.Family != nil {
-				familyID = gmPokemon.Family.ID
-			}
+	familyID := ""
+	var baseStats model.BaseStats
+	var pokemonTypes []string
+	if gmPokemon != nil {
+		baseStats = model.BaseStats{
+			Atk: gmPokemon.BaseStats.Atk,
+			Def: gmPokemon.BaseStats.Def,
+			HP:  gmPokemon.BaseStats.HP,
 		}
+		if gmPokemon.Family != nil {
+			familyID = gmPokemon.Family.ID
+		}
+		pokemonTypes = gmPokemon.Types
+	}
 
 		p := model.Pokemon{
 			PokemonRaw: model.PokemonRaw{
@@ -126,6 +128,7 @@ func ParseCollection(sheet *ods.Sheet, gmMap map[string]*model.GamemasterPokemon
 			IsTraded:   tags["Traded"],
 			SpeciesID:  speciesNorm,
 			BaseStats:  baseStats,
+			Types:      pokemonTypes,
 			FamilyID:   familyID,
 			RaidTier:   metaCats.Raid[speciesNorm],
 			GLTier:     metaCats.GL[speciesNorm],
