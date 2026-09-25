@@ -101,8 +101,14 @@ func (teamRoles) Index(i int) string {
 func RunAnalyze(args []string, projectRoot string) {
 	fs := flag.NewFlagSet("analyze", flag.ExitOnError)
 	konto := fs.String("konto", "", "Nazwa konta (np. Test)")
+	all := fs.Bool("all", false, "Analiza dla wszystkich kont (Pokemon-GO-*.ods)")
 	odsPath := fs.String("ods", "", "Sciezka do ODS (opcjonalnie)")
 	fs.Parse(args)
+
+	if *all {
+		runAnalyzeAll(projectRoot)
+		return
+	}
 
 	path := *odsPath
 	if path == "" && *konto != "" {
@@ -110,11 +116,39 @@ func RunAnalyze(args []string, projectRoot string) {
 	}
 	if path == "" {
 		fmt.Fprintf(os.Stderr, "Uzycie: pokemon analyze --konto <nazwa> [--ods <sciezka>]\n")
+		fmt.Fprintf(os.Stderr, "       pokemon analyze --all\n")
 		os.Exit(1)
 	}
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(projectRoot, path)
 	}
+
+	runAnalyzeOne(path, *konto, projectRoot)
+}
+
+func runAnalyzeAll(projectRoot string) {
+	matches, err := filepath.Glob(filepath.Join(projectRoot, "Pokemon-GO-*.ods"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "FAIL: Glob: %v\n", err)
+		os.Exit(1)
+	}
+	if len(matches) == 0 {
+		fmt.Fprintf(os.Stderr, "Brak plikow Pokemon-GO-*.ods w %s\n", projectRoot)
+		os.Exit(1)
+	}
+
+	for _, path := range matches {
+		base := filepath.Base(path)
+		kontoName := extractKontoFromFilename(base)
+		if kontoName == "" || kontoName == "Test" {
+			continue
+		}
+		fmt.Printf("\n=== Analiza: %s ===\n", kontoName)
+		runAnalyzeOne(path, kontoName, projectRoot)
+	}
+}
+
+func runAnalyzeOne(path, kontoName, projectRoot string) {
 
 	gmPath := filepath.Join(projectRoot, "data", "gamemaster.json")
 	metaPath := filepath.Join(projectRoot, "data", "meta_rankings.json")
@@ -153,15 +187,6 @@ func RunAnalyze(args []string, projectRoot string) {
 
 	now := time.Now()
 	dateStr := now.Format("20060102")
-
-	kontoName := *konto
-	if kontoName == "" {
-		base := filepath.Base(path)
-		kontoName = extractKontoFromFilename(base)
-	}
-	if kontoName == "" {
-		kontoName = "unknown"
-	}
 
 	analizyDir := filepath.Join(projectRoot, "analizy")
 	if err := os.MkdirAll(analizyDir, 0755); err != nil {
@@ -377,7 +402,7 @@ func writeMarkdownReport(
 	funcMap := template.FuncMap{
 		"inc": func(i int) int { return i + 1 },
 		"sub": func(a, b int) int { return a - b },
-		"pct": func(a, b int) float64 { return analysis.Pct(a, b) },
+		"pct": func(a, b int) string { return fmt.Sprintf("%.1f", analysis.Pct(a, b)) },
 		"boolStr": func(b bool) string { return analysis.BoolStr(b) },
 		"strOrDash": func(s string) string { return analysis.StrOrDash(s) },
 		"tierOrDash": func(p model.Pokemon) string { return analysis.TierOrDash(p) },

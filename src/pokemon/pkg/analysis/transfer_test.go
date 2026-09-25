@@ -3,6 +3,7 @@ package analysis
 import (
 	"testing"
 
+	"github.com/adzik/pokemon/config"
 	"github.com/adzik/pokemon/model"
 )
 
@@ -267,4 +268,200 @@ func buildFamilyMap(pokemon []model.Pokemon) map[string][]model.Pokemon {
 		families[fid] = append(families[fid], p)
 	}
 	return families
+}
+
+// --- isMythical / isLegendary helpers ---
+
+func TestIsMythical(t *testing.T) {
+	gmMap := map[string]*model.GamemasterPokemon{
+		"mew":       {SpeciesID: "mew", Tags: []string{"mythical", "untradeable"}},
+		"celebi":    {SpeciesID: "celebi", Tags: []string{"mythical", "untradeable"}},
+		"mewtwo":    {SpeciesID: "mewtwo", Tags: []string{"legendary"}},
+		"charizard": {SpeciesID: "charizard", Tags: []string{"starter"}},
+		"unknown":   {SpeciesID: "unknown"},
+	}
+	tests := []struct {
+		species string
+		want    bool
+	}{
+		{"mew", true},
+		{"celebi", true},
+		{"mewtwo", false},
+		{"charizard", false},
+		{"unknown", false},
+	}
+	for _, tt := range tests {
+		p := testPokemon("P-1", tt.species, tt.species, 80, 1000, false, false, false, "")
+		if got := isMythical(p, gmMap); got != tt.want {
+			t.Errorf("isMythical(%s) = %v, want %v", tt.species, got, tt.want)
+		}
+	}
+}
+
+func TestIsLegendary(t *testing.T) {
+	gmMap := map[string]*model.GamemasterPokemon{
+		"mewtwo":    {SpeciesID: "mewtwo", Tags: []string{"legendary"}},
+		"groudon":   {SpeciesID: "groudon", Tags: []string{"legendary"}},
+		"mew":       {SpeciesID: "mew", Tags: []string{"mythical", "untradeable"}},
+		"charizard": {SpeciesID: "charizard", Tags: []string{"starter"}},
+	}
+	tests := []struct {
+		species string
+		want    bool
+	}{
+		{"mewtwo", true},
+		{"groudon", true},
+		{"mew", false},
+		{"charizard", false},
+	}
+	for _, tt := range tests {
+		p := testPokemon("P-1", tt.species, tt.species, 80, 1000, false, false, false, "")
+		if got := isLegendary(p, gmMap); got != tt.want {
+			t.Errorf("isLegendary(%s) = %v, want %v", tt.species, got, tt.want)
+		}
+	}
+}
+
+// --- Mythical transfer tests ---
+
+func TestEvaluateTransfer_MythicalKeep(t *testing.T) {
+	config.Global = config.Default()
+	gmMap := map[string]*model.GamemasterPokemon{
+		"mew": {SpeciesID: "mew", Tags: []string{"mythical", "untradeable"}},
+	}
+	family := []model.Pokemon{
+		testPokemon("P-1", "mew", "mew", 82, 1375, false, false, false, ""),
+	}
+	status, reason := evaluateTransfer(family[0], buildFamilyMap(family), gmMap)
+	if status != Keep {
+		t.Errorf("Mythical: status = %q, want KEEP", status)
+	}
+	t.Logf("Reason: %s", reason)
+}
+
+func TestEvaluateTransfer_MythicalKeepLowIV(t *testing.T) {
+	config.Global = config.Default()
+	gmMap := map[string]*model.GamemasterPokemon{
+		"celebi": {SpeciesID: "celebi", Tags: []string{"mythical", "untradeable"}},
+	}
+	family := []model.Pokemon{
+		testPokemon("P-1", "celebi", "celebi", 50, 1000, false, false, false, ""),
+	}
+	status, _ := evaluateTransfer(family[0], buildFamilyMap(family), gmMap)
+	if status != Keep {
+		t.Errorf("Mythical low IV: status = %q, want KEEP", status)
+	}
+}
+
+// --- Legendary transfer tests ---
+
+func TestEvaluateTransfer_LegendarySolo(t *testing.T) {
+	config.Global = config.Default()
+	gmMap := map[string]*model.GamemasterPokemon{
+		"lugia": {SpeciesID: "lugia", Tags: []string{"legendary"}},
+	}
+	family := []model.Pokemon{
+		testPokemon("P-1", "lugia", "lugia", 75, 2045, false, false, false, ""),
+	}
+	status, reason := evaluateTransfer(family[0], buildFamilyMap(family), gmMap)
+	if status != SoftKeep {
+		t.Errorf("Legendary solo: status = %q, want SOFT_KEEP", status)
+	}
+	t.Logf("Reason: %s", reason)
+}
+
+func TestEvaluateTransfer_LegendaryUnderLimit(t *testing.T) {
+	config.Global = config.Default()
+	gmMap := map[string]*model.GamemasterPokemon{
+		"groudon": {SpeciesID: "groudon", Tags: []string{"legendary"}},
+	}
+	// 3 copies
+	family := []model.Pokemon{
+		testPokemon("P-1", "groudon", "groudon", 86, 2889, false, false, false, ""),
+		testPokemon("P-2", "groudon", "groudon", 84, 2894, false, false, false, ""),
+		testPokemon("P-3", "groudon", "groudon", 82, 2800, false, false, false, ""),
+	}
+	status, reason := evaluateTransfer(family[2], buildFamilyMap(family), gmMap)
+	if status != SoftKeep {
+		t.Errorf("Legendary 3 copies: status = %q, want SOFT_KEEP", status)
+	}
+	t.Logf("Reason: %s", reason)
+}
+
+func TestEvaluateTransfer_LegendaryAtLimit(t *testing.T) {
+	cfg := config.Default()
+	cfg.Transfer.MaxLegendaries = 3
+	config.Global = cfg
+
+	gmMap := map[string]*model.GamemasterPokemon{
+		"groudon": {SpeciesID: "groudon", Tags: []string{"legendary"}},
+	}
+	// Exactly 3 copies (= limit)
+	family := []model.Pokemon{
+		testPokemon("P-1", "groudon", "groudon", 86, 2889, false, false, false, ""),
+		testPokemon("P-2", "groudon", "groudon", 84, 2894, false, false, false, ""),
+		testPokemon("P-3", "groudon", "groudon", 82, 2800, false, false, false, ""),
+	}
+	status, _ := evaluateTransfer(family[2], buildFamilyMap(family), gmMap)
+	if status != SoftKeep {
+		t.Errorf("Legendary at limit (3/3): status = %q, want SOFT_KEEP", status)
+	}
+}
+
+func TestEvaluateTransfer_LegendaryOverLimit(t *testing.T) {
+	cfg := config.Default()
+	cfg.Transfer.MaxLegendaries = 3
+	config.Global = cfg
+
+	gmMap := map[string]*model.GamemasterPokemon{
+		"groudon": {SpeciesID: "groudon", Tags: []string{"legendary"}},
+	}
+	// 4 copies (over limit of 3)
+	family := []model.Pokemon{
+		testPokemon("P-1", "groudon", "groudon", 86, 2889, false, false, false, ""),
+		testPokemon("P-2", "groudon", "groudon", 84, 2894, false, false, false, ""),
+		testPokemon("P-3", "groudon", "groudon", 82, 2800, false, false, false, ""),
+		testPokemon("P-4", "groudon", "groudon", 80, 2700, false, false, false, ""),
+	}
+	status, reason := evaluateTransfer(family[3], buildFamilyMap(family), gmMap)
+	if status != Trade {
+		t.Errorf("Legendary over limit (4/3): status = %q, want TRADE", status)
+	}
+	t.Logf("Reason: %s", reason)
+}
+
+func TestEvaluateTransfer_LegendaryLowIVSolo(t *testing.T) {
+	config.Global = config.Default()
+	gmMap := map[string]*model.GamemasterPokemon{
+		"lugia": {SpeciesID: "lugia", Tags: []string{"legendary"}},
+	}
+	family := []model.Pokemon{
+		testPokemon("P-1", "lugia", "lugia", 60, 1800, false, false, false, ""),
+	}
+	status, _ := evaluateTransfer(family[0], buildFamilyMap(family), gmMap)
+	if status != SoftKeep {
+		t.Errorf("Legendary low IV solo: status = %q, want SOFT_KEEP", status)
+	}
+}
+
+func TestEvaluateTransfer_LegendaryDefault5(t *testing.T) {
+	cfg := config.Default()
+	cfg.Transfer.MaxLegendaries = 0 // should default to 5
+	config.Global = cfg
+
+	gmMap := map[string]*model.GamemasterPokemon{
+		"mewtwo": {SpeciesID: "mewtwo", Tags: []string{"legendary"}},
+	}
+	// 5 copies — should be SOFT_KEEP (default limit = 5)
+	var family []model.Pokemon
+	for i := 0; i < 5; i++ {
+		family = append(family, testPokemon(
+			string(rune('A'+i))+"-1", "mewtwo", "mewtwo",
+			float64(80+i), 3000+i*10, false, false, false, "",
+		))
+	}
+	status, _ := evaluateTransfer(family[4], buildFamilyMap(family), gmMap)
+	if status != SoftKeep {
+		t.Errorf("Legendary 5/5 (default limit): status = %q, want SOFT_KEEP", status)
+	}
 }

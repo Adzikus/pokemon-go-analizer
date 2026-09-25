@@ -17,6 +17,11 @@ type Config struct {
 	Report    ReportConfig    `json:"report"`
 	PVP       PVPConfig       `json:"pvp"`
 	Meta      MetaConfig      `json:"meta"`
+	Transfer  TransferConfig  `json:"transfer"`
+}
+
+type TransferConfig struct {
+	MaxLegendaries int `json:"max_legendaries"`
 }
 
 type MetaConfig struct {
@@ -152,6 +157,9 @@ func Default() *Config {
 		},
 		Meta: MetaConfig{
 			TopN: 20,
+		},
+		Transfer: TransferConfig{
+			MaxLegendaries: 5,
 		},
 	}
 }

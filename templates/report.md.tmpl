@@ -13,8 +13,8 @@
 - **Purified:** {{.Stats.Purified}} ({{pct .Stats.Purified .Stats.Total}}%)
 - **Dynamax:** {{.Stats.Dynamax}} ({{pct .Stats.Dynamax .Stats.Total}}%)
 - **Trade'owane:** {{.Stats.Traded}} ({{pct .Stats.Traded .Stats.Total}}%)
-- **HUNDO (100%% IV):** {{.Stats.Hundo}} ({{pct .Stats.Hundo .Stats.Total}}%)
-- **High IV (>=90%%):** {{.Stats.HighIV}} ({{pct .Stats.HighIV .Stats.Total}}%)
+- **HUNDO (100% IV):** {{.Stats.Hundo}} ({{pct .Stats.Hundo .Stats.Total}}%)
+- **High IV (>=90% IV):** {{.Stats.HighIV}} ({{pct .Stats.HighIV .Stats.Total}}%)
 - **Rodziny ewolucyjne:** {{.Stats.Families}}
 
 ### TOP 10 HUNDO
@@ -128,23 +128,23 @@ _Wykluczone: Pokemon z Purpose=PvP na GL cap (CP>=1450) oraz Pokemon na max CP. 
 
 ### Bezpieczne do transferu ({{len .SafeTransfer}} szt.)
 
-{{range $i, $r := .SafeTransfer}}{{if lt $i 30}}- **{{$r.Pokemon.Species}}** -- IV {{printf "%.1f" $r.Pokemon.IVPct}}%, CP {{$r.Pokemon.CP}}, Tier {{tierOrDash $r.Pokemon}}
-{{end}}{{end}}{{if gt (len .SafeTransfer) 30}}... i {{sub (len .SafeTransfer) 30}} wiecej{{end}}
+{{range $r := .SafeTransfer}}- **{{$r.Pokemon.Species}}** ({{$r.Pokemon.UID}}) -- IV {{printf "%.1f" $r.Pokemon.IVPct}}%, CP {{$r.Pokemon.CP}}, Tier {{tierOrDash $r.Pokemon}}
+{{end}}
 
 {{if .TradeTransfer}}### Do Handlu (TRADE) ({{len .TradeTransfer}} szt.)
 
-{{range $r := .TradeTransfer}}- **{{$r.Pokemon.Species}}** -- IV {{printf "%.1f" $r.Pokemon.IVPct}}%, CP {{$r.Pokemon.CP}}, {{$r.Reason}}
+{{range $r := .TradeTransfer}}- **{{$r.Pokemon.Species}}** ({{$r.Pokemon.UID}}) -- IV {{printf "%.1f" $r.Pokemon.IVPct}}%, CP {{$r.Pokemon.CP}}, {{$r.Reason}}
 {{end}}
 {{end}}
 {{if .SoftKeepTransfer}}### Ostrzezenia (SOFT KEEP)
 
-{{range $r := .SoftKeepTransfer}}- **{{$r.Pokemon.Species}}** -- {{$r.Reason}}
+{{range $r := .SoftKeepTransfer}}- **{{$r.Pokemon.Species}}** ({{$r.Pokemon.UID}}) -- {{$r.Reason}}
 {{end}}
 {{end}}
 ### NIE TRANSFERUJ (zachowaj)
 
 - **Shiny** -- nawet slabych IV, unikalne
-- **Lucky** -- 50% Stardust discount, wartosc handlowa
+- **Lucky** -- 50% Stardust discount
 - **Shadow** -- potencjal Frustration -> Return po eventach
 - **HUNDO (100% IV)** -- perfekcyjne IV
 - **High IV (>=90%) + meta S/A** -- meta-relevantne

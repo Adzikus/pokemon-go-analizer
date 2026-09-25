@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/adzik/pokemon/config"
 	"github.com/adzik/pokemon/model"
 )
 
@@ -100,33 +101,52 @@ func evaluateTransfer(p model.Pokemon, families map[string][]model.Pokemon, gmMa
 		return SoftKeep, "Lepszy shiny w rodzinie, ale IV >= 88%%"
 	}
 
-	// 5. High IV (>= 88%) → SOFT_KEEP
+	// 5. Mythical → zawsze KEEP (nieodwracalna strata, nie da sie trade)
+	if isMythical(p, gmMap) {
+		return Keep, "Mityczny — nieodwracalna strata"
+	}
+
+	// 6. High IV (>= 88%) → SOFT_KEEP
 	if p.IVPct >= 88 {
 		return SoftKeep, fmt.Sprintf("Wysokie IV %.1f%%", p.IVPct)
 	}
 
-	// 6. Purpose = "kolekcja" → SOFT_KEEP
+	// 7. Purpose = "kolekcja" → SOFT_KEEP
 	if p.Purpose == "kolekcja" {
 		return SoftKeep, "Element oznaczony do kolekcji"
 	}
 
-	// 7. Shadow → SOFT_KEEP (can't trade, like Lucky)
+	// 8. Shadow → SOFT_KEEP (can't trade, like Lucky)
 	if p.IsShadow {
 		return SoftKeep, "Shadow — nie moze byc trade"
 	}
 
-	// 8. Excess duplicates (>10 of same species) → TRADE
+	// Count species copies
 	speciesCount := 0
 	for _, fp := range family {
 		if fp.SpeciesID == p.SpeciesID {
 			speciesCount++
 		}
 	}
+
+	// 9. Legendary → SOFT_KEEP if within limit, TRADE if over
+	if isLegendary(p, gmMap) {
+		maxLeg := config.Global.Transfer.MaxLegendaries
+		if maxLeg <= 0 {
+			maxLeg = 5
+		}
+		if speciesCount <= maxLeg {
+			return SoftKeep, fmt.Sprintf("Legendarny — kopie: %d/%d", speciesCount, maxLeg)
+		}
+		return Trade, fmt.Sprintf("Duplikat legendarnego (%d szt.) — wart handlu", speciesCount)
+	}
+
+	// 10. Excess duplicates (>10 of same species) → TRADE
 	if speciesCount > 10 {
 		return Trade, fmt.Sprintf("Nadmiar: %d szt. tego gatunku", speciesCount)
 	}
 
-	// 9. Find best in family (by IV, then CP)
+	// 11. Find best in family (by IV, then CP)
 	best := p
 	for _, fp := range family {
 		if fp.IVPct > best.IVPct || (fp.IVPct == best.IVPct && fp.CP > best.CP) {
@@ -134,18 +154,44 @@ func evaluateTransfer(p model.Pokemon, families map[string][]model.Pokemon, gmMa
 		}
 	}
 
-	// 10. CP diff > 50% vs best → TRADE
+	// 12. CP diff > 50% vs best → TRADE
 	if best.UID != p.UID {
 		cpDiff := float64(best.CP-p.CP) / float64(best.CP) * 100
 		if cpDiff > 50 {
 			return Trade, fmt.Sprintf("Roznica CP %.0f%% vs najlepszy w rodzinie", cpDiff)
 		}
-		// 11. Lower IV than best → TRADE
+		// 13. Lower IV than best → TRADE
 		if best.IVPct > p.IVPct {
 			return Trade, "Nizsze IV niz najlepszy w rodzinie"
 		}
 	}
 
-	// 12. SAFE
+	// 14. SAFE
 	return Safe, "Brak wartosci bojowej/kolekcjonerskiej"
+}
+
+func isMythical(p model.Pokemon, gmMap map[string]*model.GamemasterPokemon) bool {
+	gm, ok := gmMap[p.SpeciesID]
+	if !ok {
+		return false
+	}
+	for _, t := range gm.Tags {
+		if t == "mythical" {
+			return true
+		}
+	}
+	return false
+}
+
+func isLegendary(p model.Pokemon, gmMap map[string]*model.GamemasterPokemon) bool {
+	gm, ok := gmMap[p.SpeciesID]
+	if !ok {
+		return false
+	}
+	for _, t := range gm.Tags {
+		if t == "legendary" {
+			return true
+		}
+	}
+	return false
 }
