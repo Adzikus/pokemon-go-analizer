@@ -138,3 +138,94 @@ func TestParseCollectionEmpty(t *testing.T) {
 		t.Errorf("collection length = %d, want 0 (empty sheet)", len(collection))
 	}
 }
+
+func TestParsePokedexBasic(t *testing.T) {
+	sheet := &ods.Sheet{
+		Rows: [][]string{
+			{"Dex", "Gatunek", "Typ 1", "Typ 2", "Atk", "Caught", "Lucky", "Shiny", "Hundo", "Shadow", "Purified", "Dynamax", "Mega", "Tagi", "Notatki"},
+			{"1", "Bulbasaur", "Grass", "Poison", "118", "X", "X", "", "", "", "", "", "", "", ""},
+			{"4", "Charmander", "Fire", "", "116", "X", "", "X", "", "", "", "", "", "", ""},
+		},
+	}
+	gmMap := map[string]*model.GamemasterPokemon{
+		"bulbasaur": {SpeciesID: "bulbasaur", SpeciesName: "Bulbasaur"},
+		"charmander": {SpeciesID: "charmander", SpeciesName: "Charmander"},
+	}
+
+	entries := ParsePokedex(sheet, gmMap)
+
+	if len(entries) != 2 {
+		t.Fatalf("entries = %d, want 2", len(entries))
+	}
+
+	b := entries["bulbasaur"]
+	if b == nil {
+		t.Fatal("bulbasaur not found")
+	}
+	if !b.Caught {
+		t.Error("bulbasaur Caught should be true")
+	}
+	if !b.Lucky {
+		t.Error("bulbasaur Lucky should be true")
+	}
+	if b.Shiny {
+		t.Error("bulbasaur Shiny should be false")
+	}
+
+	c := entries["charmander"]
+	if c == nil {
+		t.Fatal("charmander not found")
+	}
+	if !c.Caught {
+		t.Error("charmander Caught should be true")
+	}
+	if c.Lucky {
+		t.Error("charmander Lucky should be false")
+	}
+	if !c.Shiny {
+		t.Error("charmander Shiny should be true")
+	}
+}
+
+func TestParsePokedexSkipsUnknownSpecies(t *testing.T) {
+	sheet := &ods.Sheet{
+		Rows: [][]string{
+			{"Dex", "Gatunek", "Typ 1", "Typ 2", "Atk", "Caught", "Lucky", "Shiny"},
+			{"999", "Unknownmon", "Normal", "", "100", "X", "", ""},
+		},
+	}
+	gmMap := map[string]*model.GamemasterPokemon{}
+
+	entries := ParsePokedex(sheet, gmMap)
+
+	if len(entries) != 0 {
+		t.Errorf("entries = %d, want 0 (unknown species)", len(entries))
+	}
+}
+
+func TestParsePokedexEmpty(t *testing.T) {
+	sheet := &ods.Sheet{Rows: [][]string{}}
+	gmMap := map[string]*model.GamemasterPokemon{}
+
+	entries := ParsePokedex(sheet, gmMap)
+
+	if len(entries) != 0 {
+		t.Errorf("entries = %d, want 0 (empty sheet)", len(entries))
+	}
+}
+
+func TestParsePokedexSkipsShortRows(t *testing.T) {
+	sheet := &ods.Sheet{
+		Rows: [][]string{
+			{"Dex", "Gatunek"},
+			{"1"}, // only 1 cell, < 6
+		},
+	}
+	gmMap := map[string]*model.GamemasterPokemon{}
+
+	entries := ParsePokedex(sheet, gmMap)
+
+	if len(entries) != 0 {
+		t.Errorf("entries = %d, want 0 (short row)", len(entries))
+	}
+}

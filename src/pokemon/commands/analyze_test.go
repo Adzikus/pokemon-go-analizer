@@ -195,7 +195,7 @@ func TestBuildReportData_Section1(t *testing.T) {
 	metaCats := testMetaTiersByCategory()
 	metaTiers := gamemaster.BuildMetaTiers(metaData)
 
-	data := buildReportData(c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats)
+	data := buildReportData(c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats, nil)
 
 	if data.Stats.Total != 4 {
 		t.Errorf("Stats.Total = %d, want 4", data.Stats.Total)
@@ -224,7 +224,7 @@ func TestBuildReportData_MetaComparison(t *testing.T) {
 	metaCats := testMetaTiersByCategory()
 	metaTiers := gamemaster.BuildMetaTiers(metaData)
 
-	data := buildReportData(c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats)
+	data := buildReportData(c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats, nil)
 
 	if len(data.MetaRows) != 3 {
 		t.Errorf("MetaRows = %d, want 3", len(data.MetaRows))
@@ -244,7 +244,7 @@ func TestBuildReportData_Transfers(t *testing.T) {
 	metaCats := testMetaTiersByCategory()
 	metaTiers := gamemaster.BuildMetaTiers(metaData)
 
-	data := buildReportData(c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats)
+	data := buildReportData(c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats, nil)
 
 	total := len(data.SafeTransfer) + len(data.TradeTransfer) + len(data.SoftKeepTransfer)
 	if total == 0 {
@@ -262,7 +262,7 @@ func TestBuildReportData_LuckyTargets(t *testing.T) {
 	metaCats := testMetaTiersByCategory()
 	metaTiers := gamemaster.BuildMetaTiers(metaData)
 
-	data := buildReportData(c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats)
+	data := buildReportData(c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats, nil)
 
 	if len(data.LuckyTargets) == 0 {
 		t.Error("expected some lucky targets")
@@ -279,7 +279,7 @@ func TestBuildReportData_Section6(t *testing.T) {
 	metaCats := testMetaTiersByCategory()
 	metaTiers := gamemaster.BuildMetaTiers(metaData)
 
-	data := buildReportData(c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats)
+	data := buildReportData(c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats, nil)
 
 	if len(data.HundoDetail) != 1 {
 		t.Errorf("HundoDetail = %d, want 1", len(data.HundoDetail))
@@ -301,7 +301,7 @@ func TestBuildReportData_EmptyCollection(t *testing.T) {
 	metaCats := testMetaTiersByCategory()
 	metaTiers := gamemaster.BuildMetaTiers(metaData)
 
-	data := buildReportData(nil, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats)
+	data := buildReportData(nil, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats, nil)
 
 	if data.Stats.Total != 0 {
 		t.Errorf("Stats.Total = %d, want 0", data.Stats.Total)
@@ -348,7 +348,7 @@ func TestWriteMarkdownReport_Full(t *testing.T) {
 	projectRoot := setupTestProjectRoot(t)
 	mdPath := filepath.Join(projectRoot, "test_report.md")
 
-	writeMarkdownReport(mdPath, c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats, projectRoot)
+	writeMarkdownReport(mdPath, c, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats, projectRoot, nil)
 
 	data, err := os.ReadFile(mdPath)
 	if err != nil {
@@ -407,7 +407,7 @@ func TestWriteMarkdownReport_EmptyCollection(t *testing.T) {
 	projectRoot := setupTestProjectRoot(t)
 	mdPath := filepath.Join(projectRoot, "test_report.md")
 
-	writeMarkdownReport(mdPath, nil, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats, projectRoot)
+	writeMarkdownReport(mdPath, nil, "Test", gm, gmMap, moveMap, metaData, metaTiers, metaCats, projectRoot, nil)
 
 	data, err := os.ReadFile(mdPath)
 	if err != nil {

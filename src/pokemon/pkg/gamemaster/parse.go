@@ -150,6 +150,62 @@ func ParseCollection(sheet *ods.Sheet, gmMap map[string]*model.GamemasterPokemon
 	return collection
 }
 
+type PokedexEntry struct {
+	SpeciesID string
+	Caught    bool
+	Lucky     bool
+	Shiny     bool
+	Hundo     bool
+	Shadow    bool
+	Purified  bool
+	Dynamax   bool
+	Mega      bool
+}
+
+func ParsePokedex(sheet *ods.Sheet, gmMap map[string]*model.GamemasterPokemon) map[string]*PokedexEntry {
+	entries := map[string]*PokedexEntry{}
+
+	for _, row := range sheet.Rows {
+		if len(row) < 6 {
+			continue
+		}
+
+		species := strings.TrimSpace(row[1])
+		if species == "" {
+			continue
+		}
+
+		speciesID := ResolveSpecies(species, gmMap)
+		if speciesID == "" {
+			continue
+		}
+		if _, ok := gmMap[speciesID]; !ok {
+			continue
+		}
+
+		e := &PokedexEntry{SpeciesID: speciesID}
+		e.Caught = isTick(row, 5)
+		e.Lucky = isTick(row, 6)
+		e.Shiny = isTick(row, 7)
+		e.Hundo = isTick(row, 8)
+		e.Shadow = isTick(row, 9)
+		e.Purified = isTick(row, 10)
+		e.Dynamax = isTick(row, 11)
+		e.Mega = isTick(row, 12)
+
+		entries[speciesID] = e
+	}
+
+	return entries
+}
+
+func isTick(row []string, col int) bool {
+	if col >= len(row) {
+		return false
+	}
+	return strings.TrimSpace(row[col]) == "X"
+}
+
 func ParseInt(s string) int {
 	s = strings.TrimSpace(s)
 	if s == "" {

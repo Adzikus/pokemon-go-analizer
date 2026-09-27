@@ -75,6 +75,18 @@ func owned(speciesID string, isLucky bool) model.Pokemon {
 	}
 }
 
+func testPokedex(entries ...*gamemaster.PokedexEntry) map[string]*gamemaster.PokedexEntry {
+	m := map[string]*gamemaster.PokedexEntry{}
+	for _, e := range entries {
+		m[e.SpeciesID] = e
+	}
+	return m
+}
+
+func pokedexEntry(speciesID string, lucky bool) *gamemaster.PokedexEntry {
+	return &gamemaster.PokedexEntry{SpeciesID: speciesID, Lucky: lucky, Caught: true}
+}
+
 func TestBuildLuckyTargets_ExcludesShadow(t *testing.T) {
 	gm := buildTestGamemaster([]model.GamemasterPokemon{
 		shadow("bulbasaur_shadow", "Bulbasaur"),
@@ -82,8 +94,9 @@ func TestBuildLuckyTargets_ExcludesShadow(t *testing.T) {
 	})
 	meta := buildTestMeta([]string{"bulbasaur_shadow", "charmander"})
 	collection := []model.Pokemon{}
+	pokedex := testPokedex()
 
-	targets := BuildLuckyTargets(collection, gm, meta)
+	targets := BuildLuckyTargets(collection, gm, meta, pokedex)
 
 	for _, tgt := range targets {
 		if tgt.SpeciesID == "bulbasaur_shadow" {
@@ -99,8 +112,9 @@ func TestBuildLuckyTargets_ExcludesUntradeable(t *testing.T) {
 	})
 	meta := buildTestMeta([]string{"mew", "bulbasaur"})
 	collection := []model.Pokemon{}
+	pokedex := testPokedex()
 
-	targets := BuildLuckyTargets(collection, gm, meta)
+	targets := BuildLuckyTargets(collection, gm, meta, pokedex)
 
 	for _, tgt := range targets {
 		if tgt.SpeciesID == "mew" {
@@ -115,15 +129,16 @@ func TestBuildLuckyTargets_ExcludesOwnedLucky(t *testing.T) {
 		common("charmander", "Charmander"),
 	})
 	meta := buildTestMeta([]string{"bulbasaur", "charmander"})
-	collection := []model.Pokemon{
-		owned("bulbasaur", true), // has Lucky
-	}
+	collection := []model.Pokemon{}
+	pokedex := testPokedex(
+		pokedexEntry("bulbasaur", true),
+	)
 
-	targets := BuildLuckyTargets(collection, gm, meta)
+	targets := BuildLuckyTargets(collection, gm, meta, pokedex)
 
 	for _, tgt := range targets {
 		if tgt.SpeciesID == "bulbasaur" {
-			t.Error("species with Lucky in collection should be excluded")
+			t.Error("species with Lucky in Pokedex should be excluded")
 		}
 	}
 }
@@ -134,11 +149,12 @@ func TestBuildLuckyTargets_IncludesUnownedNonLucky(t *testing.T) {
 		common("charmander", "Charmander"),
 	})
 	meta := buildTestMeta([]string{"bulbasaur", "charmander"})
-	collection := []model.Pokemon{
-		owned("bulbasaur", false), // owned but NOT lucky
-	}
+	collection := []model.Pokemon{}
+	pokedex := testPokedex(
+		pokedexEntry("bulbasaur", false),
+	)
 
-	targets := BuildLuckyTargets(collection, gm, meta)
+	targets := BuildLuckyTargets(collection, gm, meta, pokedex)
 
 	found := false
 	for _, tgt := range targets {
@@ -157,16 +173,15 @@ func TestBuildLuckyTargets_LegendaryHigherThanCommon(t *testing.T) {
 		legendary("mewtwo", "Mewtwo"),
 		common("bulbasaur", "Bulbasaur"),
 	})
-	// Both at Raid rank 0 → both get S tier (pos 0 < 10)
 	meta := buildTestMeta([]string{"mewtwo", "bulbasaur"})
 	collection := []model.Pokemon{}
+	pokedex := testPokedex()
 
-	targets := BuildLuckyTargets(collection, gm, meta)
+	targets := BuildLuckyTargets(collection, gm, meta, pokedex)
 
 	if len(targets) != 2 {
 		t.Fatalf("expected 2 targets, got %d", len(targets))
 	}
-	// Mewtwo (legendary S = 25) should rank above Bulbasaur (common S = 20)
 	if targets[0].SpeciesID != "mewtwo" {
 		t.Errorf("first target = %q, want mewtwo (legendary should be first)", targets[0].SpeciesID)
 	}
@@ -180,16 +195,15 @@ func TestBuildLuckyTargets_MetaSCommonAboveMetaALegendary(t *testing.T) {
 		legendary("mewtwo", "Mewtwo"),
 		common("dragonite", "Dragonite"),
 	})
-	// Mewtwo at rank 15 → A tier, Dragonite at rank 5 → S tier
 	meta := buildTestMeta([]string{"x", "x", "x", "x", "x", "dragonite", "x", "x", "x", "x", "x", "x", "x", "x", "x", "mewtwo"})
 	collection := []model.Pokemon{}
+	pokedex := testPokedex()
 
-	targets := BuildLuckyTargets(collection, gm, meta)
+	targets := BuildLuckyTargets(collection, gm, meta, pokedex)
 
 	if len(targets) != 2 {
 		t.Fatalf("expected 2 targets, got %d", len(targets))
 	}
-	// Dragonite (common S = 20) > Mewtwo (legendary A = 14+5=19)
 	if targets[0].SpeciesID != "dragonite" {
 		t.Errorf("first target = %q, want dragonite (common S=20 > legendary A=19)", targets[0].SpeciesID)
 	}
@@ -200,15 +214,16 @@ func TestBuildLuckyTargets_MetaSCommonAboveMetaALegendary(t *testing.T) {
 
 func TestBuildLuckyTargets_SortedDescending(t *testing.T) {
 	gm := buildTestGamemaster([]model.GamemasterPokemon{
-		common("pidgey", "Pidgey"),     // unranked → score 0
-		common("bulbasaur", "Bulbasaur"), // rank 5 → S = 20
-		legendary("rayquaza", "Rayquaza"), // rank 0 → S = 25
-		common("charmander", "Charmander"), // rank 15 → A = 14
+		common("pidgey", "Pidgey"),
+		common("bulbasaur", "Bulbasaur"),
+		legendary("rayquaza", "Rayquaza"),
+		common("charmander", "Charmander"),
 	})
 	meta := buildTestMeta([]string{"rayquaza", "x", "x", "x", "x", "bulbasaur", "x", "x", "x", "x", "x", "x", "x", "x", "x", "charmander"})
 	collection := []model.Pokemon{}
+	pokedex := testPokedex()
 
-	targets := BuildLuckyTargets(collection, gm, meta)
+	targets := BuildLuckyTargets(collection, gm, meta, pokedex)
 
 	for i := 1; i < len(targets); i++ {
 		if targets[i].Score > targets[i-1].Score {
@@ -225,8 +240,9 @@ func TestBuildLuckyTargets_EmptyCollection(t *testing.T) {
 	})
 	meta := buildTestMeta([]string{"mewtwo", "bulbasaur"})
 	collection := []model.Pokemon{}
+	pokedex := testPokedex()
 
-	targets := BuildLuckyTargets(collection, gm, meta)
+	targets := BuildLuckyTargets(collection, gm, meta, pokedex)
 
 	if len(targets) != 2 {
 		t.Errorf("empty collection should include all tradeable species, got %d", len(targets))
@@ -237,8 +253,9 @@ func TestBuildLuckyTargets_EmptyGamemaster(t *testing.T) {
 	gm := buildTestGamemaster([]model.GamemasterPokemon{})
 	meta := buildTestMeta([]string{})
 	collection := []model.Pokemon{}
+	pokedex := testPokedex()
 
-	targets := BuildLuckyTargets(collection, gm, meta)
+	targets := BuildLuckyTargets(collection, gm, meta, pokedex)
 
 	if len(targets) != 0 {
 		t.Errorf("empty gamemaster should produce empty targets, got %d", len(targets))
@@ -251,12 +268,13 @@ func TestBuildLuckyTargets_AllAlreadyLucky(t *testing.T) {
 		common("charmander", "Charmander"),
 	})
 	meta := buildTestMeta([]string{"bulbasaur", "charmander"})
-	collection := []model.Pokemon{
-		owned("bulbasaur", true),
-		owned("charmander", true),
-	}
+	collection := []model.Pokemon{}
+	pokedex := testPokedex(
+		pokedexEntry("bulbasaur", true),
+		pokedexEntry("charmander", true),
+	)
 
-	targets := BuildLuckyTargets(collection, gm, meta)
+	targets := BuildLuckyTargets(collection, gm, meta, pokedex)
 
 	if len(targets) != 0 {
 		t.Errorf("all species already Lucky should produce empty list, got %d", len(targets))

@@ -17,12 +17,12 @@ type LuckyTarget struct {
 	Reason    string
 }
 
-func BuildLuckyTargets(c []model.Pokemon, gmData *gamemaster.GamemasterData, metaData *gamemaster.MetaData) []LuckyTarget {
-	// Step 1: build map of owned lucky species
+func BuildLuckyTargets(c []model.Pokemon, gmData *gamemaster.GamemasterData, metaData *gamemaster.MetaData, pokedex map[string]*gamemaster.PokedexEntry) []LuckyTarget {
+	// Step 1: build map of lucky species from Pokedex (master list)
 	ownedLucky := map[string]bool{}
-	for _, p := range c {
-		if p.IsLucky {
-			ownedLucky[p.SpeciesID] = true
+	for speciesID, entry := range pokedex {
+		if entry.Lucky {
+			ownedLucky[speciesID] = true
 		}
 	}
 
@@ -66,6 +66,10 @@ func BuildLuckyTargets(c []model.Pokemon, gmData *gamemaster.GamemasterData, met
 			bonus = 5
 		}
 		score := base + bonus
+
+		if score == 0 {
+			continue
+		}
 
 		reason := buildReason(gm.SpeciesName, isLegend, base)
 

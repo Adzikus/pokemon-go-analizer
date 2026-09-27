@@ -183,6 +183,9 @@ func runAnalyzeOne(path, kontoName, projectRoot string) {
 
 	collection := gamemaster.ParseCollection(sheet, gmMap, metaCats)
 
+	pokedexSheet := doc.GetSheet("Pokedex")
+	pokedex := gamemaster.ParsePokedex(pokedexSheet, gmMap)
+
 	analysis.EnrichWithScores(collection, gmMap, moveMap, metaCats)
 
 	now := time.Now()
@@ -198,7 +201,7 @@ func runAnalyzeOne(path, kontoName, projectRoot string) {
 	writeJSONSnapshot(jsonPath, collection, kontoName)
 
 	mdPath := filepath.Join(analizyDir, fmt.Sprintf("Analiza-%s-%s-%s.md", dateStr, config.Global.Report.ModelName, kontoName))
-	writeMarkdownReport(mdPath, collection, kontoName, gmData, gmMap, moveMap, metaData, metaTiers, metaCats, projectRoot)
+	writeMarkdownReport(mdPath, collection, kontoName, gmData, gmMap, moveMap, metaData, metaTiers, metaCats, projectRoot, pokedex)
 
 	fmt.Printf("SUCCESS: Wygenerowano dla %s (%d Pokemon)\n", kontoName, len(collection))
 	fmt.Printf("  JSON: %s\n", jsonPath)
@@ -231,6 +234,7 @@ func buildReportData(
 	metaData *gamemaster.MetaData,
 	metaTiers map[string]string,
 	metaCats gamemaster.MetaTiersByCategory,
+	pokedex map[string]*gamemaster.PokedexEntry,
 ) ReportData {
 	dateStr := time.Now().Format("2006-01-02")
 	stats := analysis.ComputeStats(collection)
@@ -351,7 +355,7 @@ func buildReportData(
 		}
 	}
 
-	data.LuckyTargets = analysis.BuildLuckyTargets(collection, gm, metaData)
+	data.LuckyTargets = analysis.BuildLuckyTargets(collection, gm, metaData, pokedex)
 
 	data.Legendary = analysis.SortByScore(analysis.FilterBool(collection, func(p model.Pokemon) bool {
 		bestTier := metaCats.BestMetaTier(p.SpeciesID)
@@ -396,8 +400,9 @@ func writeMarkdownReport(
 	metaTiers map[string]string,
 	metaCats gamemaster.MetaTiersByCategory,
 	projectRoot string,
+	pokedex map[string]*gamemaster.PokedexEntry,
 ) {
-	data := buildReportData(collection, konto, gm, gmMap, moveMap, metaData, metaTiers, metaCats)
+	data := buildReportData(collection, konto, gm, gmMap, moveMap, metaData, metaTiers, metaCats, pokedex)
 
 	funcMap := template.FuncMap{
 		"inc": func(i int) int { return i + 1 },
