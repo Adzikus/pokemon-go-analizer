@@ -73,9 +73,17 @@ func ParseCollection(sheet *ods.Sheet, gmMap map[string]*model.GamemasterPokemon
 		if len(row) > 21 {
 			purpose = strings.TrimSpace(row[21])
 		}
+		priority := ""
+		if len(row) > 22 {
+			priority = strings.TrimSpace(row[22])
+		}
 		decision := ""
 		if len(row) > 23 {
 			decision = strings.TrimSpace(row[23])
+		}
+		celRozwoju := ""
+		if len(row) > 24 {
+			celRozwoju = strings.TrimSpace(row[24])
 		}
 		notes := ""
 		if len(row) > 26 {
@@ -114,10 +122,12 @@ func ParseCollection(sheet *ods.Sheet, gmMap map[string]*model.GamemasterPokemon
 				FastMove: fast,
 				Charged1: ch1,
 				Charged2: ch2,
-				Date:     date,
-				Purpose:  purpose,
-				Decision: decision,
-				Notes:    notes,
+			Date:       date,
+			Purpose:    purpose,
+			Priority:   priority,
+			Decision:   decision,
+			CelRozwoju: celRozwoju,
+			Notes:      notes,
 			},
 			IVPct:      ivPct,
 			IsShiny:    tags["Shiny"],

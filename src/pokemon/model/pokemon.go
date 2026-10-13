@@ -14,10 +14,12 @@ type PokemonRaw struct {
 	FastMove string // Kol K: Szybki ruch
 	Charged1 string // Kol L: Charged 1
 	Charged2 string // Kol M: Charged 2
-	Date     string // Kol U: Data wpisu
-	Purpose  string // Kol V: Przeznaczenie
-	Decision string // Kol X: Decyzja
-	Notes    string // Kol AA: Notatki
+	Date       string // Kol U: Data wpisu
+	Purpose    string // Kol V: Przeznaczenie
+	Priority   string // Kol W: Priorytet Rozwoju
+	Decision   string // Kol X: Decyzja
+	CelRozwoju string // Kol Y: Cel rozwoju
+	Notes      string // Kol AA: Notatki
 }
 
 // Pokemon is enriched PokemonRaw with computed fields.

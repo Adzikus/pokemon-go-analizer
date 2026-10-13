@@ -154,25 +154,28 @@ func TestBuildFullRanking_Sorted(t *testing.T) {
 		{PokemonRaw: model.PokemonRaw{UID: "P-3"}, DevScore: 70},
 	}
 
-	rows := BuildFullRanking(c)
-	if len(rows) != 3 {
-		t.Fatalf("expected 3 rows, got %d", len(rows))
+	result := BuildFullRanking(c)
+	if len(result.Rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(result.Rows))
 	}
-	if rows[0].Rank != 1 || rows[0].Pokemon.UID != "P-2" {
-		t.Errorf("rank 1 = %s, want P-2", rows[0].Pokemon.UID)
+	if result.Rows[0].Rank != 1 || result.Rows[0].Pokemon.UID != "P-2" {
+		t.Errorf("rank 1 = %s, want P-2", result.Rows[0].Pokemon.UID)
 	}
-	if rows[1].Rank != 2 || rows[1].Pokemon.UID != "P-3" {
-		t.Errorf("rank 2 = %s, want P-3", rows[1].Pokemon.UID)
+	if result.Rows[1].Rank != 2 || result.Rows[1].Pokemon.UID != "P-3" {
+		t.Errorf("rank 2 = %s, want P-3", result.Rows[1].Pokemon.UID)
 	}
-	if rows[2].Rank != 3 || rows[2].Pokemon.UID != "P-1" {
-		t.Errorf("rank 3 = %s, want P-1", rows[2].Pokemon.UID)
+	if result.Rows[2].Rank != 3 || result.Rows[2].Pokemon.UID != "P-1" {
+		t.Errorf("rank 3 = %s, want P-1", result.Rows[2].Pokemon.UID)
 	}
 }
 
 func TestBuildFullRanking_Empty(t *testing.T) {
-	rows := BuildFullRanking(nil)
-	if len(rows) != 0 {
-		t.Errorf("expected 0 rows, got %d", len(rows))
+	result := BuildFullRanking(nil)
+	if len(result.Rows) != 0 {
+		t.Errorf("expected 0 rows, got %d", len(result.Rows))
+	}
+	if result.Total != 0 {
+		t.Errorf("expected Total 0, got %d", result.Total)
 	}
 }
 

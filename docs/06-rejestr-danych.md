@@ -373,7 +373,7 @@ chargedDPS = chargedPower / timeToCharge
 | 2. Rajdy | `collection[]` + `moveMap` | `EffectiveATK`, `RaidDPS`, `RaidDPSOptimal`, `MoveDPSFast`, `MoveDPSCharged` |
 | 3. PvP | `collection[]` + `config.PVP.LeagueCaps` | `CP`, `GLTier/ULTier/MLTier`, `GLScore/ULScore/MLScore`, `DevScore` |
 | 4. Transfer | `collection[]` + `gamemaster` | `IVPct`, `IsShiny`, `IsLucky`, `IsShadow`, `IsHundo`, `RaidTier`, `Purpose` |
-| 5. Lucky Trade | `collection[]` + `gamemaster` + `metaData` | `IsLucky`, `SpeciesID`, `RaidScore` |
+| 5. Lucky Trade | `pokedex` + `gamemaster` + `metaData` | `Pokedex.Lucky`, `SpeciesID`, `RaidScore` |
 | 6. Szczegółowa | `collection[]` | Wszystkie pola wg kategorii (Legendary, HUNDO, Shadow, PvP, Shiny, Inne) |
 | 7. Ranking | `collection[]` | `DevScore`, `IVPct`, `IsLucky`, `IsShadow`, `RaidTier/GLTier/ULTier/MLTier`, `CP`, `FastMove/Charged1/Charged2`, `Purpose` |
 

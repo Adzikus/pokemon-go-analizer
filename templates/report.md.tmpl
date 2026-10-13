@@ -203,9 +203,9 @@ _Wykluczone: Pokemon z Purpose=PvP na GL cap (CP>=1450) oraz Pokemon na max CP. 
 
 ---
 
-## 7. Wszystkie Pokemon-y -- Ranking Rozwoju ({{len .Collection}} sztuk)
+## 7. Pokemon-y do rozwoju ({{.FullRanking.Total}} sztuk, wykluczone {{.FullRanking.Excluded}} rozwiniętych)
 
 | # | UID | Pokemon | Score | IV% | Lucky | Shadow | Tier | CP | Liga | Moves | Przeznaczenie |
 |--:|-----|---------|------:|----:|:-----:|:------:|:----:|---:|:-----|:------|:-------------|
-{{range $row := .FullRanking}}| {{$row.Rank}} | {{$row.Pokemon.UID}} | **{{$row.Pokemon.Species}}** {{formatEmojis $row.Pokemon}} | {{printf "%.1f" $row.Pokemon.DevScore}} | {{printf "%.1f" $row.Pokemon.IVPct}}% | {{formatLucky $row.Pokemon}} | {{formatShadow $row.Pokemon}} | {{tierOrDash $row.Pokemon}} | {{$row.Pokemon.CP}} | - | {{formatMoves $row.Pokemon}} | {{purposeLabel $row.Pokemon}} |
+{{range $row := .FullRanking.Rows}}| {{$row.Rank}} | {{$row.Pokemon.UID}} | **{{$row.Pokemon.Species}}** {{formatEmojis $row.Pokemon}} | {{printf "%.1f" $row.Pokemon.DevScore}} | {{printf "%.1f" $row.Pokemon.IVPct}}% | {{formatLucky $row.Pokemon}} | {{formatShadow $row.Pokemon}} | {{tierOrDash $row.Pokemon}} | {{$row.Pokemon.CP}} | - | {{formatMoves $row.Pokemon}} | {{purposeLabel $row.Pokemon}} |
 {{end}}

@@ -94,10 +94,13 @@ func TestBuildPvPTeams_FiltersByTier(t *testing.T) {
 	}
 
 	teams := BuildPvPTeams(c, "GL", nil)
+	if len(teams) == 0 {
+		t.Fatal("expected at least 1 team")
+	}
 	for _, team := range teams {
 		for _, p := range team.Members {
-			if p.GLTier == "D" || p.GLTier == "C" {
-				t.Errorf("member %s has tier %s (below B), should be excluded", p.UID, p.GLTier)
+			if p.GLTier == "" {
+				t.Errorf("member %s has empty tier, should be included (tier >= D)", p.UID)
 			}
 		}
 	}

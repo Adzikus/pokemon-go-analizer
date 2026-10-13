@@ -61,7 +61,7 @@ type ReportData struct {
 	MetaStars    map[string]bool
 	OtherDetail  []model.Pokemon
 
-	FullRanking []analysis.RankingRow
+	FullRanking analysis.FullRankingResult
 }
 
 type ContextData struct {

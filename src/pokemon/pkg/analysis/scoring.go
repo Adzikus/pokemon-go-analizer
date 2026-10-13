@@ -61,6 +61,52 @@ func CalculateMaxCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP int) int {
 	return CalculateCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, 50)
 }
 
+// CalculateLevel finds the Pokemon's level by finding the highest level
+// where CP(level) <= currentCP. Returns a level between 1.0 and 50.0.
+func CalculateLevel(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, currentCP int) float64 {
+	bestLevel := 1.0
+	for level := 1.0; level <= 50.0; level += 0.5 {
+		cp := CalculateCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, level)
+		if cp <= currentCP {
+			bestLevel = level
+		} else {
+			break
+		}
+	}
+	return bestLevel
+}
+
+// NextPowerUpCP returns the CP after one power-up (level + 0.5).
+// If already at level 50, returns currentCP.
+func NextPowerUpCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, currentCP int) int {
+	level := CalculateLevel(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, currentCP)
+	if level >= 50 {
+		return currentCP
+	}
+	return CalculateCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, level+0.5)
+}
+
+// PurposeCap returns the CP cap for a given purpose and development goal.
+// CelRozwoju takes precedence over Purpose. Returns 0 if no cap applies.
+func PurposeCap(purpose, celRozwoju string, maxCP int) int {
+	// CelRozwoju determines the specific league/target
+	switch strings.ToLower(celRozwoju) {
+	case "ul", "ultra league", "pvp ul":
+		return 2500
+	case "gl", "great league":
+		return 1500
+	case "ml", "master league", "max":
+		return maxCP
+	}
+	// Fallback on Purpose — PvP without CelRozwoju = ML (no cap)
+	switch strings.ToLower(purpose) {
+	case "rajdy", "raid", "gym":
+		return maxCP
+	default:
+		return maxCP
+	}
+}
+
 type ScoreResult struct {
 	Score      float64
 	IVScore    float64

@@ -22,8 +22,13 @@ type pvpScored struct {
 	moveTypeSet map[string]bool
 	cpEff       float64
 	typeBonus   float64
+	tierBonus   float64
 	weaknesses  map[string]bool
 	covers      map[string]bool
+}
+
+var tierBonusMap = map[string]float64{
+	"S": 10, "A+": 8, "A": 6, "B+": 4, "B": 2, "C": 1, "D": 0,
 }
 
 func GetLeagueCaps() map[string]int {
@@ -110,7 +115,7 @@ func BuildPvPTeams(c []model.Pokemon, league string, moveMap map[string]*gamemas
 			continue
 		}
 		tier := LeagueTier(p, league)
-		if gamemaster.TierRank(tier) >= gamemaster.TierRank("B") {
+		if gamemaster.TierRank(tier) >= gamemaster.TierRank("D") {
 			candidates = append(candidates, p)
 		}
 	}
@@ -143,13 +148,16 @@ func BuildPvPTeams(c []model.Pokemon, league string, moveMap map[string]*gamemas
 
 		combined := allTypes(typeSet, moveTypeSet)
 
+		tb := tierBonusMap[LeagueTier(p, league)]
+
 		item := pvpScored{
 			pokemon:     p,
 			cpEff:       cpEff,
 			typeSet:     typeSet,
 			moveTypeSet: moveTypeSet,
 			typeBonus:   typeBonus,
-			score:       p.DevScore + cpEff*10 + typeBonus,
+			tierBonus:   tb,
+			score:       p.DevScore + cpEff*10 + typeBonus + tb,
 			weaknesses:  typeWeaknesses(p.Types),
 			covers:      typeCovers(combinedKeys(combined)),
 		}

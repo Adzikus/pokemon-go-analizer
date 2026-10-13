@@ -1,6 +1,8 @@
 package analysis
 
 import (
+	"sort"
+
 	"github.com/adzik/pokemon/model"
 	"github.com/adzik/pokemon/pkg/gamemaster"
 )
@@ -44,11 +46,47 @@ type RankingRow struct {
 	Pokemon model.Pokemon
 }
 
-func BuildFullRanking(c []model.Pokemon) []RankingRow {
-	sorted := SortByScore(c)
-	rows := make([]RankingRow, len(sorted))
-	for i, p := range sorted {
-		rows[i] = RankingRow{Rank: i + 1, Pokemon: p}
+type FullRankingResult struct {
+	Rows      []RankingRow
+	Total     int
+	Excluded  int
+}
+
+// IsFullyDeveloped checks if a Pokemon has reached or exceeded its CP cap
+// considering that the next power-up (+0.5 level) would also push it over.
+func IsFullyDeveloped(p model.Pokemon, cap int) bool {
+	if cap <= 0 {
+		return false
 	}
-	return rows
+	if p.CP >= cap {
+		return true
+	}
+	nextCP := NextPowerUpCP(p.BaseStats.Atk, p.BaseStats.Def, p.BaseStats.HP, p.IVAtk, p.IVDef, p.IVHP, p.CP)
+	return nextCP > cap
+}
+
+func BuildFullRanking(c []model.Pokemon) FullRankingResult {
+	result := FullRankingResult{Total: len(c)}
+	for _, p := range c {
+		cap := PurposeCap(p.Purpose, p.CelRozwoju, p.MaxCP)
+		if IsFullyDeveloped(p, cap) {
+			result.Excluded++
+			continue
+		}
+		result.Rows = append(result.Rows, RankingRow{Pokemon: p})
+	}
+	sort.Slice(result.Rows, func(i, j int) bool {
+		a, b := result.Rows[i].Pokemon, result.Rows[j].Pokemon
+		if a.DevScore != b.DevScore {
+			return a.DevScore > b.DevScore
+		}
+		if a.IVPct != b.IVPct {
+			return a.IVPct > b.IVPct
+		}
+		return a.CP > b.CP
+	})
+	for i := range result.Rows {
+		result.Rows[i].Rank = i + 1
+	}
+	return result
 }

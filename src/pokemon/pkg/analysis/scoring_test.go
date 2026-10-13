@@ -479,3 +479,114 @@ func TestEnrichWithScores(t *testing.T) {
 		t.Errorf("RaidDPSOptimal = %f, want > 0", p.RaidDPSOptimal)
 	}
 }
+
+func TestCalculateLevel(t *testing.T) {
+	tests := []struct {
+		name      string
+		cp        int
+		minLevel  float64
+		maxLevel  float64
+	}{
+		{"L1 Bulbasaur", CalculateCP(118, 111, 128, 10, 10, 10, 1), 0.5, 1.5},
+		{"L20 Bulbasaur", CalculateCP(118, 111, 128, 10, 10, 10, 20), 19.5, 20.5},
+		{"L30 Bulbasaur", CalculateCP(118, 111, 128, 10, 10, 10, 30), 29.5, 30.5},
+		{"L40 Bulbasaur", CalculateCP(118, 111, 128, 10, 10, 10, 40), 39.5, 40.5},
+		{"L50 Bulbasaur", CalculateCP(118, 111, 128, 10, 10, 10, 50), 49.5, 50.0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			level := CalculateLevel(118, 111, 128, 10, 10, 10, tt.cp)
+			if level < tt.minLevel || level > tt.maxLevel {
+				t.Errorf("CalculateLevel(%d) = %f, want [%f, %f]", tt.cp, level, tt.minLevel, tt.maxLevel)
+			}
+		})
+	}
+}
+
+func TestNextPowerUpCP(t *testing.T) {
+	baseAtk, baseDef, baseHP := 118, 111, 128
+	ivAtk, ivDef, ivHP := 10, 10, 10
+
+	cpAtL20 := CalculateCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, 20)
+	nextCP := NextPowerUpCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, cpAtL20)
+	cpAtL205 := CalculateCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, 20.5)
+
+	if nextCP != cpAtL205 {
+		t.Errorf("NextPowerUpCP(L20) = %d, want %d (L20.5)", nextCP, cpAtL205)
+	}
+
+	cpAtL50 := CalculateCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, 50)
+	nextCP50 := NextPowerUpCP(baseAtk, baseDef, baseHP, ivAtk, ivDef, ivHP, cpAtL50)
+	if nextCP50 != cpAtL50 {
+		t.Errorf("NextPowerUpCP(L50) = %d, want %d (already max)", nextCP50, cpAtL50)
+	}
+}
+
+func TestPurposeCap(t *testing.T) {
+	tests := []struct {
+		purpose    string
+		celRozwoju string
+		maxCP      int
+		want       int
+	}{
+		// CelRozwoju takes precedence
+		{"PvP", "Great League", 4000, 1500},
+		{"PvP", "GL", 4000, 1500},
+		{"PvP", "Ultra League", 4000, 2500},
+		{"PvP", "UL", 4000, 2500},
+		{"PvP", "PvP UL", 4000, 2500},
+		{"PvP", "ML", 4000, 4000},
+		{"PvP", "Master League", 4000, 4000},
+		{"PvP", "MAX", 4000, 4000},
+		// Fallback on Purpose — PvP without CelRozwoju = ML (no cap)
+		{"PvP", "", 4000, 4000},
+		{"Rajdy", "", 4000, 4000},
+		{"Gym", "", 4000, 4000},
+		// CelRozwoju empty + Purpose empty = no cap
+		{"", "", 4000, 4000},
+		{"Kolekcja", "", 4000, 4000},
+	}
+
+	for _, tt := range tests {
+		name := fmt.Sprintf("%s/%s", tt.purpose, tt.celRozwoju)
+		t.Run(name, func(t *testing.T) {
+			got := PurposeCap(tt.purpose, tt.celRozwoju, tt.maxCP)
+			if got != tt.want {
+				t.Errorf("PurposeCap(%q, %q, %d) = %d, want %d", tt.purpose, tt.celRozwoju, tt.maxCP, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsFullyDeveloped(t *testing.T) {
+	tests := []struct {
+		name string
+		atk  int
+		def  int
+		hp   int
+		cp   int
+		cap  int
+		want bool
+	}{
+		{"At cap", 112, 152, 225, 1500, 1500, true},
+		{"Above cap", 112, 152, 225, 1501, 1500, true},
+		{"Below cap, room for power-up", 112, 152, 225, 1300, 1500, false},
+		{"CP 1497 Azumarill, next power-up 1508 > 1500", 112, 152, 225, 1497, 1500, true},
+		{"CP 1485 Azumarill, next power-up 1497 <= 1500", 112, 152, 225, 1485, 1500, false},
+		{"Zero cap (no limit)", 112, 152, 225, 4000, 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := model.Pokemon{
+				PokemonRaw: model.PokemonRaw{IVAtk: 15, IVDef: 15, IVHP: 15, CP: tt.cp},
+				BaseStats:  model.BaseStats{Atk: tt.atk, Def: tt.def, HP: tt.hp},
+			}
+			got := IsFullyDeveloped(p, tt.cap)
+			if got != tt.want {
+				t.Errorf("IsFullyDeveloped(CP=%d, cap=%d) = %v, want %v", tt.cp, tt.cap, got, tt.want)
+			}
+		})
+	}
+}

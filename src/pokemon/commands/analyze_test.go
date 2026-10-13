@@ -309,8 +309,8 @@ func TestBuildReportData_EmptyCollection(t *testing.T) {
 	if len(data.TopHundo) != 0 {
 		t.Errorf("TopHundo = %d, want 0", len(data.TopHundo))
 	}
-	if len(data.FullRanking) != 0 {
-		t.Errorf("FullRanking = %d, want 0", len(data.FullRanking))
+	if len(data.FullRanking.Rows) != 0 {
+		t.Errorf("FullRanking.Rows = %d, want 0", len(data.FullRanking.Rows))
 	}
 }
 
@@ -390,7 +390,7 @@ func TestWriteMarkdownReport_Full(t *testing.T) {
 	if !strings.Contains(out, "## 6. Szczegolowa analiza") {
 		t.Error("missing section 6")
 	}
-	if !strings.Contains(out, "## 7. Wszystkie Pokemon-y") {
+	if !strings.Contains(out, "## 7. Pokemon-y do rozwoju") {
 		t.Error("missing section 7")
 	}
 }

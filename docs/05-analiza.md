@@ -858,7 +858,7 @@ stop
 | 2 | Zestawy do Rajdów | Typ bossa → super-effective | CP DESC, IV% DESC | Raid by Type + Multipurpose + Tier Listy |
 | 3 | Zestawy do PvP | CP range per liga + meta_tier S/A/B | dev_score DESC | Druzyny 3v3 (GL/UL/ML) + Coverage |
 | 4 | Transfer | 4 gates: shiny/lucky/shadow/hundo → tier → purpose | CP DESC | Safe list (30) + NIE TRANSFERUJ rules |
-| 5 | Lucky Trade | `gamemaster.tags[]` + `meta_rankings.raid_attackers` | Lucky set + normalize speciesId | Priority 1 (Legendary∩MetaS) + Priority 2 (Shadow∩MetaS/A) + strategy |
+| 5 | Lucky Trade | `pokedex.Lucky` + `gamemaster.tags[]` + `meta_rankings.raid_attackers` | Pokedex lucky set + normalize speciesId | Priority 1 (Legendary∩MetaS) + Priority 2 (Shadow∩MetaS/A) + strategy |
 | 6 | Szczegółowa analiza | 6 podkategorii (Legendary, HUNDO, Shadow, PvP, Shiny, Inne) | dev_score DESC (lub CP dla HUNDO) | Ocena 1-10 + rekomendacja per podkategoria |
 | 7 | Ranking Rozwoju | dev_score (7 komponentów, 0-100) | dev_score DESC | Ranking z numeracją (osobny .puml) |
 
@@ -1441,8 +1441,8 @@ Generujemy **ranking scored** Pokemon, których warto szukać w Lucky Trades. Wy
 ##### Algorytm
 
 ```
-1. Zbuduj indeks lucky:
-   ownedLucky = {speciesID → true} dla każdego lucky Pokemon w kolekcji
+1. Zbuduj indeks lucky z arkusza Pokedex (master list):
+   ownedLucky = {speciesID → true} dla każdego gatunku z Lucky=X w Pokedex
 
 2. Zbuduj mapę meta score (z meta_rankings.json — Raid rankings):
    - Pozycja 0-9 (top 10) → score 20 (tier S)
@@ -1451,7 +1451,8 @@ Generujemy **ranking scored** Pokemon, których warto szukać w Lucky Trades. Wy
 
 3. Dla każdego gatunku z gamemaster:
    - Pomiń shadow, untradeable
-   - Pomiń jeśli już masz Lucky (ownedLucky)
+   - Pomiń jeśli już masz Lucky (ownedLucky z Pokedex)
+   - Pomiń jeśli score = 0 (nieistotne gatunki)
    - isLegend = tags contains "legendary" lub "mythical"
    - score = metaScore + bonusLegend
      bonusLegend = 5 (jeśli legendary/mythical), 0 w przeciwnym razie
@@ -1503,12 +1504,12 @@ LuckyTarget:
 
 start
 
-:Kolekcja (is_lucky → ownedLucky);
+:Pokedex (Lucky=X → ownedLucky);
 :meta_rankings.json (raid rankings);
 :gamemaster.json (wszystkie gatunki);
 
 partition "Budowa indeksow" {
-    :ownedLucky = Set(speciesID) z Lucky Pokemon;
+    :ownedLucky = Set(speciesID) z Pokedex Lucky;
     :metaScore = Map(speciesID → score)
     top 10 = 20pts, 10-19 = 14pts;
 }
@@ -1519,6 +1520,9 @@ partition "Petla per gatunek" {
             :Pomin;
         endif
         if (Juz ma Lucky?) then (TAK)
+            :Pomin;
+        endif
+        if (Score = 0?) then (TAK)
             :Pomin;
         endif
         :isLegend = legendary lub mythical;
